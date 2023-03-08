@@ -1,3 +1,12 @@
+.vscode/
+logs/
+data/
+
+# just in the beginning...
+examples/
+scandy/models/ObjectModel/
+
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
