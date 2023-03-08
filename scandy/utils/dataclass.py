@@ -4,7 +4,7 @@ import pandas as pd
 import imageio
 import yaml
 
-import functions as uf
+from .functions import anisotropic_centerbias
 
 
 class Dataset:
@@ -240,7 +240,7 @@ class Dataset:
         if centerbias is None:
             return featuremaps
         elif centerbias == "anisotropic_default":
-            return featuremaps * uf.anisotropic_centerbias(
+            return featuremaps * anisotropic_centerbias(
                 self.VID_SIZE_X, self.VID_SIZE_Y
             )
         # elif: Implement other keywords?!
@@ -289,7 +289,7 @@ class Dataset:
 
     def load_videoframes(self, videoname, ext="mpg"):
         """
-        Loads the frames of a given video, only used for visualization. 
+        Loads the frames of a given video, only used for visualization.
         Assumes that imageio with ffmpeg is installed.
 
         :param videoname: Video for which the object masks are loaded
@@ -299,7 +299,7 @@ class Dataset:
         :return: NSS maps of shape (frames, VID_SIZE_Y, VID_SIZE_X)
         :rtype: np.ndarray
         """
-        vid = imageio.get_reader(f"{self.videoframes}{videoname}.{ext}", "ffmpeg") # type: ignore # format=Format('ffmpeg'))
+        vid = imageio.get_reader(f"{self.videoframes}{videoname}.{ext}", "ffmpeg")  # type: ignore # format=Format('ffmpeg'))
 
         vidlist = []
         for image in vid.iter_data():
@@ -323,7 +323,7 @@ class Dataset:
 
         :param videos: Videos that should be considered (`all`, `train`, `test` or `sgl_vid`), defaults to "all"
         :type videos: str, optional
-        :raises Exception: Invalid `videos` 
+        :raises Exception: Invalid `videos`
         :return: Dictionary with keys ["B", "D", "I", "R"] and how much time is spent in each
         :rtype: dict
         """

@@ -1,1 +1,1 @@
-from .model import PxlDDModel
+from .model import LocationModel

@@ -41,7 +41,7 @@ class LocationModel(Model):
         self.video_data = None
         # Attributes that are updated when running the model for a single video
         self._decision_map = np.zeros(
-            (self.Dataset["VID_SIZE_Y"], self.Dataset["VID_SIZE_X"])
+            (self.Dataset.VID_SIZE_Y, self.Dataset.VID_SIZE_X)
         )
         self._ior_map = np.zeros_like(self._decision_map)
         self._sens_map = np.zeros_like(self._decision_map)
@@ -143,9 +143,9 @@ class LocationModel(Model):
         gaze_gaussian = uf.gaussian_2d(
             self._gaze_loc[1],
             self._gaze_loc[0],
-            self.Dataset["VID_SIZE_X"],
-            self.Dataset["VID_SIZE_Y"],
-            self.params["att_dva"] * self.Dataset["DVA_TO_PX"],
+            self.Dataset.VID_SIZE_X,
+            self.Dataset.VID_SIZE_Y,
+            self.params["att_dva"] * self.Dataset.DVA_TO_PX,
             sumnorm=False,
         )
         self._sens_map = gaze_gaussian
@@ -159,9 +159,9 @@ class LocationModel(Model):
             inhibition = uf.gaussian_2d(
                 self._prev_loc[1],
                 self._prev_loc[0],
-                self.Dataset["VID_SIZE_X"],
-                self.Dataset["VID_SIZE_Y"],
-                self.params["ior_dva"] * self.Dataset["DVA_TO_PX"],
+                self.Dataset.VID_SIZE_X,
+                self.Dataset.VID_SIZE_Y,
+                self.params["ior_dva"] * self.Dataset.DVA_TO_PX,
             )
             # TRYOUT: instead of fully inhibiting, scale with self.params["ior_magnitude"]
             self._ior_map = np.clip(self._ior_map + inhibition, 0, 1)
@@ -236,12 +236,8 @@ class LocationModel(Model):
             self._gaze_loc += np.array([gaze_drift[1], gaze_drift[0]])
 
         # make sure that gaze is always on video
-        self._gaze_loc[0] = max(
-            min(self._gaze_loc[0], self.Dataset["VID_SIZE_Y"] - 1), 0
-        )
-        self._gaze_loc[1] = max(
-            min(self._gaze_loc[1], self.Dataset["VID_SIZE_X"] - 1), 0
-        )
+        self._gaze_loc[0] = max(min(self._gaze_loc[0], self.Dataset.VID_SIZE_Y - 1), 0)
+        self._gaze_loc[1] = max(min(self._gaze_loc[1], self.Dataset.VID_SIZE_X - 1), 0)
 
     def reinit_for_sgl_run(self):
         """
@@ -261,7 +257,6 @@ class LocationModel(Model):
         self._all_dvs = []
         self._all_iors = []
         self._all_sens = []
-
 
     def sgl_vid_run(self, videoname, force_reload=False, visualize=False):
 
@@ -359,7 +354,7 @@ class LocationModel(Model):
         # TODO: do 0th element in simulation code, not here...
         DVs = np.concatenate(
             (
-                np.zeros((1, self.Dataset["VID_SIZE_Y"], self.Dataset["VID_SIZE_X"])),
+                np.zeros((1, self.Dataset.VID_SIZE_Y, self.Dataset.VID_SIZE_X)),
                 res_dict["DVs"],
             )
         )

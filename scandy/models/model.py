@@ -249,7 +249,7 @@ class Model:
 
         # option to pass it so it doesn't have to be loaded each time in the loop
         if segmentation_masks is None:
-            segmentation_masks = self.Dataset.get_objectmasks(videoname)
+            segmentation_masks = self.Dataset.load_objectmasks(videoname)
         # get all foveated objects! should maybe be a seperate method?
         objects_per_frame = [
             uf.object_at_position(
@@ -364,7 +364,7 @@ class Model:
             self.result_df = pd.DataFrame()
         for videoname in self.result_dict:
             # load masks outside of loop to be a bit more efficient
-            segmentation_masks = self.Dataset.get_objectmasks(videoname)
+            segmentation_masks = self.Dataset.load_objectmasks(videoname)
             for runname in self.result_dict[videoname]:
                 df_trial = self.evaluate_trial(videoname, runname, segmentation_masks)
                 self.result_df = self.result_df.append(df_trial, ignore_index=True)
@@ -444,7 +444,7 @@ class Model:
         # go through all videos (keys) and load the GT
         for videoname in sorted(self.result_dict):
             # load masks outside of loop to be a bit more efficient
-            gt_fovmaps = self.Dataset.get_nssmaps(videoname)
+            gt_fovmaps = self.Dataset.load_nssmaps(videoname)
             nframes = gt_fovmaps.shape[0]
             vid_nss_scores = []
             for runname in self.result_dict[videoname]:
@@ -800,7 +800,7 @@ class Model:
             videoname in self.result_dict
         ), f"No simulated scanpaths for {videoname} yet, first run the model!"
         res_dict = self.result_dict[videoname]
-        vidlist = self.Dataset.get_videoframes(videoname)
+        vidlist = self.Dataset.load_videoframes(videoname)
 
         @gif.frame
         def frame(f):
