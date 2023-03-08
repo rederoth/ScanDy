@@ -4,10 +4,9 @@ from scipy.ndimage.measurements import center_of_mass
 
 class ObjectFile:
     """
-    All object files that accumulate evidence for the Drift Diffusion Model are Object Files.
-    The Nomenclature is inspired by the idea of Kahnemann et al. ~1980.
-    Class is initialized by the dictionary created by load_object_parameters
-    TODO: nice represent function!
+    Object files are representations, `, within which successive states of an
+    object are linked and integrated` (Kahnemann et al. 1992).
+    Class is initialized for each video within load_videodata using the segmentation masks.
     """
 
     def __init__(self, obj_id, object_masks):
@@ -23,14 +22,15 @@ class ObjectFile:
         # initialize attributes that are relevant for the evidence accumulation
         self.foveated = False
         self.decision_variable = 0
-        self.ior = 0  # used to update IOR
-        self.inhibition = 0  # effective IOR value used for the decision
-        # self.inobj_ior = 0 --> scalar model parameter
+        self._ior_tempmem = 0  # used to update IOR
+        self.ior = 0  # effective IOR value used for the decision
 
         # avoid calculations if object does not appear in a frame using this list
         self.appears_in = [
             np.any(self.object_maps[f]) for f in range(self.object_maps.shape[0])
         ]
+        # to avoid recalculations, we calculate the shift of the object in each frame
+        #   but only if the object is not the background
         if not self.ground:
             position = [
                 self._get_position(f, apear) for f, apear in enumerate(self.appears_in)
@@ -38,7 +38,6 @@ class ObjectFile:
             self.shift = [0] + [
                 position[f] - position[f - 1] for f in range(1, len(position))
             ]
-        # not needed: else: self.position = [np.array([0,0],dtype=int) for i in range(len(self.appears_in))]
 
         # it is well established that object size plays a role and e.g. Nuthmann2020 scale it with the log
         # we therefore calculate the average features (TERM / pxsize) and multiply it with np.log(pxsize)
@@ -53,15 +52,15 @@ class ObjectFile:
         Always run this before a trial to make sure nothing is caried over!
         """
         self.foveated = False
+        self._ior_tempmem = 0
         self.ior = 0
-        self.inhibition = 0
         self.decision_variable = 0
 
-    def _get_position(self, frame, appearence):
+    def _get_position(self, frame, appears_in_frame):
         """
         Calculate the middle point of the object mask in a given frame, only used for calculating the shift
         """
-        if appearence:
+        if appears_in_frame:
             return np.array(center_of_mass(self.object_maps[frame]), dtype=int)
         else:
             return np.array([0, 0], dtype=int)
@@ -77,80 +76,55 @@ class ObjectFile:
             self.appears_in[frame] and self.object_maps[frame, gaze_loc[0], gaze_loc[1]]
         )
 
-    def update_ior(
-        self, ior_decay, ior_inobj
-    ):  # VARIANT: for "maxIORinobj", ior_inobj):
+    def update_ior(self, model_params):
         """
-        This method accounts for forgetting. IOR is increasing up to 1 while an object is foveated.
+        This method accounts for the scanpath history. If the object is foveated, the IOR is set to 1.
+        Objects (except background) are inhibited during foveation with model_params["ior_inobj"].
         When it is not foveated, this value goes back to 0 over time, with the update -1/ior_decay per frame.
-        TODO?? Instead of growing to 1 (taking up in memory), we set it to 1 as soon as it's foveated!
         """
         if self.foveated:
-            self.ior = 1
+            # if not foveated anymore, it decreases starting from 1
+            self._ior_tempmem = 1
             if self.ground:
-                self.inhibition = 0.0
+                self.ior = 0.0
             else:
-                self.inhibition = ior_inobj
-            # self.ior = (
-            #     1.0  # VARIANT: for "maxIORinobj": * ior_inobj  # min(self.ior, 1)
-            # )
+                self.ior = model_params["ior_inobj"]
         else:
-            if self.ior > 0:
-                self.ior -= 1.0 / ior_decay
-                self.ior = max(self.ior, 0)
-            self.inhibition = self.ior * 1.0
+            # if not foveated anymore, decrease IOR (only if larger than 0)
+            if self._ior_tempmem > 0:
+                self._ior_tempmem -= 1.0 / model_params["ior_decay"]
+                self._ior_tempmem = max(self._ior_tempmem, 0)
+            self.ior = self._ior_tempmem * 1.0
 
-    def calc_decision_variable(self, frame, sensitivitymap, featuremap, ddm_sig):
+    def update_evidence(self, frame, feature_map, sens_map, model_params):
         """
-        This function is the heart of the decision making model!
-        It accumulates the evidence to look at this object in the given frame
-        This depends on the features within the object in the given frame (standard: Molin saliency),
-        the size of the object mask (prevously free parameter gamma, now scaled with log),
-        and the current gaze position (att_dva).
-        For an intra object saccade, the attention spreads uniformly over the objects (intraobjatt)
+        Accumulates evidence in favor of moving the eyes towards the object.
+
+        Drift diffusion process where the drift rate is proportional to the
+        features and sensitivity within the object mask and how strongly the
+        object is inhibited.
+
+        :param frame: current frame
+        :type frame: str
+        :param feature_map: Feature map of the current frame, loaded in modul I
+        :type feature_map: np.ndarray
+        :param sens_map: Sensitivity map of the current frame, updated in modul II
+        :type sens_map: np.ndarray
+        :param model_params: Model parameters, needed for the DDM noise
+        :type model_params: dict
+        :return: Updated decision variable for the object
+        :rtype: float
         """
         # only update evidence according to scene if the object is visible
         if self.appears_in[frame]:
             mu = (
-                np.sum((self.object_maps[frame] * sensitivitymap * featuremap))
+                np.sum((self.object_maps[frame] * sens_map * feature_map))
                 / self.pxsize[frame]
-                * np.log(self.pxsize[frame])  # np.sqrt(self.pxsize[frame])  #
-                * (1 - self.inhibition)
+                * np.log(self.pxsize[frame])
+                * (1 - self.ior)
             )
 
-            ### OLD: different IOR treatment, now this is dealt with in update_ior!
-            # # attention spread is different for within- or between-object saccades!
-            # if self.foveated:
-            #     # attention on the perceptual ground spreads like a Gaussian
-            #     if self.ground:
-            #         mu = (
-            #             np.sum((self.object_maps[frame] * sensitivitymap * featuremap))
-            #             / self.pxsize[frame]
-            #             * np.log(
-            #                 self.pxsize[frame]
-            #             )  # np.sqrt(self.pxsize[frame])  # self.pxsize[frame] * np.log(self.pxsize[frame])
-            #         )  # * (1 - self.ior * ior_inobj) before --> no IOR in background
-            #     else:
-            #         # CHANGED INTERPRETATION: Attention on objects spreads uniform with 1 across whole object!
-            #         # CHANGED 23.4.21: scaling used to be pxsize * np.log(pxsize),
-            #         #  --> but one is more likely to make saccade within an object if it's bigger!
-            #         #  --> sqrt used here: https://jov.arvojournals.org/article.aspx?articleid=2193943#88379220
-            #         mu = (
-            #             np.sum((self.object_maps[frame] * featuremap))
-            #             / self.pxsize[frame]
-            #             * np.log(self.pxsize[frame])  # np.sqrt(self.pxsize[frame])
-            #             * (1 - self.ior * ior_inobj)
-            #         )
-            # else:
-            #     # accumulate evidence based on feature map and attention
-            #     mu = (
-            #         np.sum((self.object_maps[frame] * sensitivitymap * featuremap))
-            #         / self.pxsize[frame]
-            #         * np.log(self.pxsize[frame])  # np.sqrt(self.pxsize[frame])  #
-            #         * (1 - self.ior)
-            #     )
-
-            self.decision_variable += mu + np.random.normal(0, ddm_sig)
+            self.decision_variable += mu + np.random.normal(0, model_params["ddm_sig"])
 
         # if object is not visible in one frame, decrease the evidence by 10% (--> exponentially to zero)
         else:

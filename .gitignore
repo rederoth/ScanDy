@@ -4,7 +4,7 @@ data/
 
 # just in the beginning...
 examples/
-scandy/models/ObjectModel/
+# scandy/models/ObjectModel/
 test_hpc.ipynb
 
 # Byte-compiled / optimized / DLL files

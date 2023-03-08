@@ -10,6 +10,7 @@ from neurolib.utils.collections import dotdict
 from abc import ABC, abstractmethod
 
 from ..utils import functions as uf
+from .objectfile import ObjectFile
 
 
 class Model:
@@ -33,24 +34,8 @@ class Model:
         else:
             self.name = "Noname"
 
-        # assert integration is not None, "Model integration function not given."
-        # self.integration = integration
-
-        # assert (
-        #     get_videodata is not None
-        # ), "No function for loading the data for each video."
-        # self.get_videodata = get_videodata
-
         assert isinstance(params, dict), "Parameters must be a dictionary."
         self.params = params
-
-        # # assert self.visual_vars not None:
-        # assert hasattr(
-        #     self, "visual_vars"
-        # ), f"Model {self.name} has no attribute `visual_vars` (list of strings containing what to visualize)."
-        # assert np.all(
-        #     [type(s) is str for s in self.visual_vars]
-        # ), "All entries in visual_vars must be strings."
 
         # video data will be loaded before running the model
         self.video_data = None
@@ -65,15 +50,11 @@ class Model:
     # @abstractmethod
     def load_videodata(self, videoname):
         """
-        TODO: move (back?) to base class?!?!
-
         Provided the model parameters, load everything that is necessary to run
-        the model for a given video.
+        the model for a given video into self.video_data.
 
         :param videoname: Single video for which the model should be run
         :type videoname: str
-        :return: Parameter dictionary with all data neccessary to run the model for one video
-        :rtype: dict
         """
         viddata = dotdict({})
         assert self.params is not None, "Model parameters not loaded"
@@ -89,6 +70,13 @@ class Model:
             viddata.flow_maps = self.Dataset.load_flowmaps(videoname)
         if self.params["use_objects"]:
             viddata.object_masks = self.Dataset.load_objectmasks(videoname)
+            if self.params["use_objectfiles"]:
+                # Create list of object files, ASSUMPTION: masks have values from zero to nobj
+                maxobj = np.max(viddata.object_masks)
+                viddata.object_list = [
+                    ObjectFile(obj_id, viddata.object_masks)
+                    for obj_id in range(maxobj + 1)
+                ]
         viddata.nframes = self.Dataset.video_frames[videoname]
         self.video_data = viddata  # save to class
 
