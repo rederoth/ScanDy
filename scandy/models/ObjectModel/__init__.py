@@ -1,1 +1,1 @@
-from .model import ObjDDModel
+from .model import ObjectModel
