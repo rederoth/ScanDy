@@ -252,63 +252,7 @@ class ObjectModel(Model):
         self._gaze_loc[0] = max(min(self._gaze_loc[0], self.Dataset.VID_SIZE_Y - 1), 0)
         self._gaze_loc[1] = max(min(self._gaze_loc[1], self.Dataset.VID_SIZE_X - 1), 0)
 
-    def sgl_vid_run(self, videoname, force_reload=False):
-        """
-        TODO: Move to base class!
-        Run the model on a single video, depending on the implementation of the
-        modules (I-V).
 
-        :param videoname: Name of the video to run the model on
-        :type videoname: str
-        :param force_reload: Reload the video data (usually avoided), defaults to False
-        :type force_reload: bool, optional
-        :return: Result dictionary, containing the scanpath and saccade times
-        :rtype: dict
-        """
-        assert self.params is not None, "Model parameters not loaded"
-        # load the relevant data for videoname if not already loaded (or forced)
-        if self.video_data is None or force_reload:
-            self.load_videodata(videoname)
-            print("Loaded video (None or reload) for", videoname)
-        elif self.video_data.videoname != videoname:
-            self.load_videodata(videoname)
-            print("Loaded video (new name) for", videoname)
-        assert self.video_data is not None, "Video data not loaded"
-
-        # If provided, set random seed.
-        if self.params.rs:
-            np.random.seed(self.params.rs)
-
-        # reinit all variables
-        self.reinit_for_sgl_run()
-
-        # set initial gaze location
-        self._gaze_loc = self.params["startpos"].copy()
-        self._scanpath.append(self._gaze_loc.copy())
-
-        # Loop through all frames and run all modules
-        # no new location in prediction in last frame => len(scanpath)=nframes
-        for f in range(self.video_data["nframes"] - 1):
-
-            self._current_frame = f
-            self.update_features()
-            self.update_sensitivity()
-            self.update_ior()
-            self.update_decision()
-            self.update_gaze()
-
-            # store when a saccade was made in list
-            if self._new_target is not None:
-                self._f_sac.append(f)
-
-            # add updated gaze location to scanpath
-            self._scanpath.append(self._gaze_loc.copy())
-
-        res_dict = {
-            "gaze": np.asarray(self._scanpath),
-            "f_sac": np.asarray(self._f_sac),
-        }
-        return res_dict
 
     #########
     ## TODO !!!

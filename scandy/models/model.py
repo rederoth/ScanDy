@@ -7,7 +7,7 @@ import seaborn as sns
 from collections import Counter
 import gif
 from neurolib.utils.collections import dotdict
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 
 from ..utils import functions as uf
 from .objectfile import ObjectFile
@@ -17,8 +17,9 @@ class Model:
     """
     The Model class serves as base class for all scanpath models.
 
-    It runs the model for a given set of videos and seeds, and stores the results in `result_dict`.
-    The dictionary is then used to create a pandas dataframe, which is stored in the `result_df` attribute.
+    Can be run for a given set of videos and seeds and stores the results in `result_dict`.
+    The dictionary with a scanpath for each seed and video can then be evaluated 
+    analogously to human eye tracking data. is then used to create a pandas dataframe, which is stored in the `result_df` attribute.
     The `result_df` is in the same format as the Dataset.gt_foveation_df, and can be used to evaluate the model.
     """
 
@@ -47,7 +48,6 @@ class Model:
         else:
             self.result_df = preload_res_df
 
-    # @abstractmethod
     def load_videodata(self, videoname):
         """
         Provided the model parameters, load everything that is necessary to run
@@ -81,8 +81,92 @@ class Model:
         self.video_data = viddata  # save to class
 
     @abstractmethod
-    def sgl_vid_run(self, viddata):
+    def reinit_for_sgl_run():
+        """Reinitialize all variables that are used in the model run."""
         pass
+
+    @abstractmethod
+    def update_features():
+        """Module (I), defined in each model."""
+        pass
+
+    @abstractmethod
+    def update_sensitivity():
+        """Module (II), defined in each model."""
+        pass
+
+    @abstractmethod
+    def update_ior():
+        """Module (III), defined in each model."""
+        pass
+
+    @abstractmethod
+    def update_decision():
+        """Module (IV), defined in each model."""
+        pass
+
+    @abstractmethod
+    def update_gaze():
+        """Module (V), defined in each model."""
+        pass
+
+    def sgl_vid_run(self, videoname, force_reload=False):
+        """
+        TODO: Move to base class!
+        Run the model on a single video, depending on the implementation of the
+        modules (I-V).
+
+        :param videoname: Name of the video to run the model on
+        :type videoname: str
+        :param force_reload: Reload the video data (usually avoided), defaults to False
+        :type force_reload: bool, optional
+        :return: Result dictionary, containing the scanpath and saccade times
+        :rtype: dict
+        """
+        assert self.params is not None, "Model parameters not loaded"
+        # load the relevant data for videoname if not already loaded (or forced)
+        if self.video_data is None or force_reload:
+            self.load_videodata(videoname)
+            print("Loaded video (None or reload) for", videoname)
+        elif self.video_data.videoname != videoname:
+            self.load_videodata(videoname)
+            print("Loaded video (new name) for", videoname)
+        assert self.video_data is not None, "Video data not loaded"
+
+        # If provided, set random seed.
+        if self.params.rs:
+            np.random.seed(self.params.rs)
+
+        # reinit all variables
+        self.reinit_for_sgl_run()
+
+        # set initial gaze location
+        self._gaze_loc = self.params["startpos"].copy()
+        self._scanpath.append(self._gaze_loc.copy())
+
+        # Loop through all frames and run all modules
+        # no new location in prediction in last frame => len(scanpath)=nframes
+        for f in range(self.video_data["nframes"] - 1):
+
+            self._current_frame = f
+            self.update_features()
+            self.update_sensitivity()
+            self.update_ior()
+            self.update_decision()
+            self.update_gaze()
+
+            # store when a saccade was made in list
+            if self._new_target is not None:
+                self._f_sac.append(f)
+
+            # add updated gaze location to scanpath
+            self._scanpath.append(self._gaze_loc.copy())
+
+        res_dict = {
+            "gaze": np.asarray(self._scanpath),
+            "f_sac": np.asarray(self._f_sac),
+        }
+        return res_dict
 
     def run(self, videos_to_run, seeds=[], overwrite_old=False):
         """
