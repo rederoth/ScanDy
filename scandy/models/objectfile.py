@@ -95,6 +95,7 @@ class ObjectFile:
                 self._ior_tempmem -= 1.0 / model_params["ior_decay"]
                 self._ior_tempmem = max(self._ior_tempmem, 0)
             self.ior = self._ior_tempmem * 1.0
+        return self.ior
 
     def update_evidence(self, frame, feature_map, sens_map, model_params):
         """

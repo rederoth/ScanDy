@@ -1,6 +1,7 @@
 .vscode/
 logs/
 data/
+results/
 
 # just in the beginning...
 examples/

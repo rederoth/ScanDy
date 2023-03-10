@@ -187,9 +187,11 @@ class ObjectModel(Model):
             for obj in self.video_data["object_list"]:
                 # TRYOUT: We could set to self.params["ddm_reset"] instead of 0
                 obj.decision_variable = 0.0
-
         else:
             self._new_target = None
+
+        if self.params["sglrun_return"]:
+            self._all_dvs.append(self._decision_objs.copy())
 
     def update_gaze(self):
         """
