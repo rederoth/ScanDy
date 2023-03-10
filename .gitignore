@@ -3,7 +3,7 @@ logs/
 data/
 
 # just in the beginning...
-examples/
+# examples/
 # scandy/models/ObjectModel/
 test_hpc.ipynb
 
