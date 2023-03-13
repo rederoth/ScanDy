@@ -321,7 +321,7 @@ class ObjectModel(Model):
                     vmax=self.params["ddm_thres"],
                 )
                 axs[1, 2].imshow(
-                    temp * evidence_map * self._all_iors[f][o],
+                    temp * evidence_map,  # * self._all_iors[f][o]
                     cmap=cmaps[(o) % 5],
                     vmin=0,
                     # vmax=self.params["ddm_thres"],

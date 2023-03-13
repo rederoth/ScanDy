@@ -41,7 +41,8 @@ def anisotropic_centerbias(xmax, ymax, sigx2=0.22, v=0.45, mean_to_1=False):
 
 def gaussian_2d(x0, y0, xmax, ymax, xsig, ysig=None, sumnorm=False):
     """
-    _summary_
+    This function returns a 2D Gaussian around the (current gaze) position (x0,y0)
+    on a frame of size (xmax, ymax). If no ysig is provided, the Gaussian is isotropic.
 
     :param x0: Center point of the Gaussian in x direction
     :type x0: int
