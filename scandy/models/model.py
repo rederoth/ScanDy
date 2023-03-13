@@ -18,7 +18,7 @@ class Model:
     The Model class serves as base class for all scanpath models.
 
     Can be run for a given set of videos and seeds and stores the results in `result_dict`.
-    The dictionary with a scanpath for each seed and video can then be evaluated 
+    The dictionary with a scanpath for each seed and video can then be evaluated
     analogously to human eye tracking data. is then used to create a pandas dataframe, which is stored in the `result_df` attribute.
     The `result_df` is in the same format as the Dataset.gt_foveation_df, and can be used to evaluate the model.
     """
@@ -112,7 +112,6 @@ class Model:
 
     def sgl_vid_run(self, videoname, force_reload=False):
         """
-        TODO: Move to base class!
         Run the model on a single video, depending on the implementation of the
         modules (I-V).
 
@@ -128,7 +127,7 @@ class Model:
         if self.video_data is None or force_reload:
             self.load_videodata(videoname)
             print("Loaded video (None or reload) for", videoname)
-        elif self.video_data.videoname != videoname:
+        elif self.video_data["videoname"] != videoname:
             self.load_videodata(videoname)
             print("Loaded video (new name) for", videoname)
         assert self.video_data is not None, "Video data not loaded"
@@ -171,8 +170,16 @@ class Model:
     def run(self, videos_to_run, seeds=[], overwrite_old=False):
         """
         Main interfacing function to run a model.
-        :param videos_to_run: string, containing either a single video name, `test`, `train`, or `all`
-        :param seeds: list of random seeds which will each result in a separate run/`trial` of the model (per video)
+
+        Results are then stored in the `result_dict` attribute.
+
+        :param videos_to_run: Keyword for which videos to use, either a single video name, `test`, `train`, or `all`
+        :type videos_to_run: str
+        :param seeds: list of seeds which will each result in a separate run/`trial` of the model, defaults to []
+        :type seeds: list, optional
+        :param overwrite_old: If you want to run the same model again set this to True to overwrite the previous results, defaults to False
+        :type overwrite_old: bool, optional
+        :raises Exception: If the `videos_to_run` argument is not one of the allowed values
         """
         if (len(self.result_df.index) > 0) or (len(self.result_dict) > 0):
             assert (
@@ -209,7 +216,7 @@ class Model:
         else:
             self.params["sglrun_return"] = False
 
-        # actually run the model for the given videos:
+        # now run the model for the given videos & seeds:
         for i, vid in enumerate(videos):
             video_res_dict = {}
             logging.info(
@@ -218,20 +225,26 @@ class Model:
             self.load_videodata(vid)
             for s in seeds:
                 self.params["rs"] = s
-                # Integration method from the specified model is used to write the result (dictionary) in result_dict
+                # write the result (dictionary) in result_dict
                 video_res_dict[f"seed{s:03d}"] = self.sgl_vid_run(vid)
             self.result_dict[vid] = video_res_dict
 
-        # check if there was a problem with the simulated data
-        # self.checkOutputs()
-
     def save_model(self, filename):
+        """
+        Save the model to a pickle file.
+
+        :param filename: Include the full path and name of the model results, the extension
+        will be appended by `.pkl`.
+        :type filename: str
+        """
         with open(f"{filename}.pkl", "wb") as outp:
             pickle.dump(self, outp, pickle.HIGHEST_PROTOCOL)
         logging.info(f"Model {self.name} is stored to {filename}.pkl")
 
     def clear_model_outputs(self):
-        """Clears the model's results to create a fresh one"""
+        """
+        Clears the model's results to create a fresh one
+        """
         self.result_dict = {}
         self.result_df = pd.DataFrame()
 
@@ -241,7 +254,13 @@ class Model:
 
     def select_videos(self, videos_to_eval="all"):
         """
-        Function that selects the videos to be used for analysis.
+        Convenience function that selects the videos to be used for analysis.
+
+        :param videos_to_eval: Keyword for which videos to use, either a single video name, `test`, `train`, or `all`, defaults to "all"
+        :type videos_to_eval: str, optional
+        :raises Exception: None of the allowed keywords were given.
+        :return: List of strings with the name of the videos to be used for analysis
+        :rtype: list
         """
         if videos_to_eval == "all":
             videos = self.Dataset.used_videos
@@ -265,8 +284,11 @@ class Model:
 
     def evaluate_all_dur_amp(self):
         """
-        Analog to evaluate_all_to_df, but only calculates foveation durations and saccade amplitudes.
-        Hence, it is way more efficient and should be used when only these two statistics are of interest.
+        It makes sense to use this instead of `evaluate_all_to_df`, if only the
+        foveation durations and saccade amplitudes of the result are of interest.
+
+        :return: All durations and amplitudes of the model's results
+        :rtype: _type_
         """
         df_all = pd.DataFrame()
         for videoname in self.result_dict:
@@ -307,22 +329,32 @@ class Model:
 
     def evaluate_trial(self, videoname, runname, segmentation_masks=None):
         """
-        Main evaluation function that returns a dataframe with all relevant foveation (and saccade) statistics.
+        Evaluation function that returns a dataframe with all relevant foveation
+        and saccade statistics for a single trial.
+
+        :param videoname: Name of the video the model was run on
+        :type videoname: str
+        :param runname: Name of the run / seed the model was run for
+        :type runname: str
+        :param segmentation_masks: The segmentation masks of the video should be
+        passed here, such that they dont have to be loaded for each trial, defaults to None
+        :type segmentation_masks: np.array, optional
+        :return: Dataframe with all relevant foveation and saccade statistics of this trial
+        :rtype: pd.DataFrame
         """
         assert (
             self.result_dict
         ), "`result_dict` is empty. You need to run the model before evaluating the results."
-        # Runs in key error if they don't exist, maybe assert?
         run_dict = self.result_dict[videoname][runname]
         assert {"gaze", "f_sac"} <= set(
             run_dict
         ), "Integration method did not provide `gaze` and `f_sac`"
-        df = pd.DataFrame()
 
-        # option to pass it so it doesn't have to be loaded each time in the loop
+        # option to pass masks so they dont have to be loaded each time in the loop
         if segmentation_masks is None:
             segmentation_masks = self.Dataset.load_objectmasks(videoname)
-        # get all foveated objects! should maybe be a seperate method?
+        # get all foveated objects - we allow for a tolerance of 1 dva for an
+        # object to be considered foveated (as for the human eye tracking data)
         objects_per_frame = [
             uf.object_at_position(
                 segmentation_masks[f],
@@ -332,7 +364,7 @@ class Model:
             )
             for f in range(self.Dataset.video_frames[videoname])
         ]
-
+        # list of when saccades have been made, i.e when foveations end
         # no saccade in last frame possible, since loop runs only in range(frames-1)
         fov_ends = np.append(
             run_dict["f_sac"], self.Dataset.video_frames[videoname] - 1
@@ -340,11 +372,12 @@ class Model:
         N_fov = len(fov_ends)
         # dataframe has a row for each foveation
         df = pd.DataFrame()
-        # this column allows to ignore_index=True without losing individual indexing per run
+        # nfov allows to ignore_index=True without losing individual indexing per run
         df["nfov"] = [int(i) for i in range(N_fov)]
-        # same for all foveations in this run
+        # columns where the value is the same for all foveations in this run
         df["video"] = videoname
         df["subject"] = runname
+        # get the start and end frame for each foveation
         df["frame_start"] = [0] + [f + 1 for f in fov_ends[:-1]]
         df["frame_end"] = fov_ends
         # add a `1+` such that even a single frame fov has a duration --> sums to duration!
@@ -367,8 +400,8 @@ class Model:
             for n in range(N_fov)
         ]
 
-        # saccade properties depend on the end of the current fov and beginning of next one
-        # TODO: check if diff has correct sign (otherwise angle is different...)
+        # calculate a number of saccade properties based on the gaze shift
+        # depending on the end of the current fov and beginning of next one
         diff = np.array(
             [
                 run_dict["gaze"][f + 1] - run_dict["gaze"][f]
@@ -394,6 +427,7 @@ class Model:
             df["sac_angle_h"] = [np.nan]
             df["sac_angle_p"] = [np.nan]
 
+        # calculate the foveation categories (Background, Detection, Inspection, Revisit)
         fov_categories = []
         ret_times = np.zeros(N_fov) * np.nan
         for n in range(N_fov):
@@ -419,12 +453,19 @@ class Model:
                     )
         df["fov_category"] = fov_categories
         df["ret_times"] = ret_times
-        # self.result_df = self.result_df.append(df), RETURN INSTEAD!
+        # return the dataframe
         return df
 
     def evaluate_all_to_df(self, overwrite_old=False):
         """
-        Function that evaluates all trials and stores them to self.result_df.
+        Evaluate all trials in `result_dict` and store the results in `result_df`.
+
+        Runs `evaluate_trial` for each trial in `result_dict`.
+
+        :param overwrite_old: Should not be repeated if its already been evaluated, defaults to False
+        :type overwrite_old: bool, optional
+        :return: Result dataframe of the model run
+        :rtype: pd.DataFrame
         """
         assert (
             self.result_dict
@@ -445,7 +486,12 @@ class Model:
 
     def get_fovcat_ratio(self, videos_to_eval="all"):
         """
-        Convenience function that returns the ratios as dictionary for the different categories.
+                Convenience function that returns the ratios as dictionary for the different categories.
+
+        :param videos_to_eval: Keyword for videos, defaults to "all"
+        :type videos_to_eval: str, optional
+        :return: Dictionary with the ratios for the different categories
+        :rtype: dict
         """
         videos = self.select_videos(videos_to_eval)
         eval_df = self.result_df[self.result_df["video"].isin(videos)]
@@ -530,355 +576,34 @@ class Model:
 
         return nss_with_std
 
-    ######
-    ## Evaluation visualization functions...
-    ######
-
-    def show_result_statistics(self, with_fovcat=True, title=True):
-        """
-        Show the summary statistics in fovdur, saccamp,
-        TODO: throws error when category for one video is empty
-        """
-        assert (
-            len(self.result_df) > 0
-        ), "`result_df` is empty, make sure to run `evaluate_all_to_df` first!"
-        if with_fovcat:
-            hue = "fov_category"
-            hue_order = ["B", "D", "I", "R"]
-        else:
-            hue = None
-            hue_order = None
-        # for the generation of titles
-        dataname = ["GT", "SIM"]
-        # log of foveation duration MEAN FOV DURATION AND MEDIAN
-        fig1, ax1 = plt.subplots(1, 2, dpi=150, figsize=(10, 3))
-        if not "log_duration" in self.Dataset.gt_foveation_df.columns:
-            self.Dataset.gt_foveation_df["log_duration"] = np.log10(
-                self.Dataset.gt_foveation_df["duration_ms"]
-            )
-        if not "log_duration" in self.result_df.columns:
-            self.result_df["log_duration"] = np.log10(self.result_df["duration_ms"])
-        sns.histplot(
-            data=self.Dataset.gt_foveation_df,
-            x="log_duration",
-            hue=hue,
-            hue_order=hue_order,
-            kde=True,
-            ax=ax1[0],
-            multiple="dodge",
-        )  # , bins=20)
-        sns.histplot(
-            data=self.result_df,
-            x="log_duration",
-            hue=hue,
-            hue_order=hue_order,
-            kde=True,
-            ax=ax1[1],
-            multiple="dodge",
-        )  # , bins=20)
-        if title:
-            mean = [
-                np.rint(np.mean(self.Dataset.gt_foveation_df["duration_ms"])),
-                np.rint(np.mean(self.result_df["duration_ms"])),
-            ]
-            median = [
-                np.rint(np.median(self.Dataset.gt_foveation_df["duration_ms"])),
-                np.rint(np.median(self.result_df["duration_ms"])),
-            ]
-        for i in [0, 1]:
-            if title:
-                ax1[i].set_title(
-                    f"{dataname[i]} mean dur: {mean[i]}ms (median: {median[i]}ms)"
-                )
-            ax1[i].set_xticks([1, 2, 3, 4])
-            ax1[i].set_xticklabels([10, 100, 1000, 10000])
-            ax1[i].set_xlabel("Foveation duration [ms]")
-
-        # saccade amplitude MEAN AND MEDIAN SACC AMP
-        fig2, ax2 = plt.subplots(1, 2, dpi=150, figsize=(10, 3))
-        sns.histplot(
-            data=self.Dataset.gt_foveation_df,
-            x="sac_amp_dva",
-            hue=hue,
-            hue_order=hue_order,
-            kde=True,
-            ax=ax2[0],
-            multiple="dodge",
-        )  # , bins=20)
-        sns.histplot(
-            data=self.result_df,
-            x="sac_amp_dva",
-            hue=hue,
-            hue_order=hue_order,
-            kde=True,
-            ax=ax2[1],
-            multiple="dodge",
-        )  # , bins=20)
-        if title:
-            mean = [
-                np.round(np.mean(self.Dataset.gt_foveation_df["sac_amp_dva"]), 2),
-                np.round(np.mean(self.result_df["sac_amp_dva"]), 2),
-            ]
-            median = [
-                np.round(np.nanmedian(self.Dataset.gt_foveation_df["sac_amp_dva"]), 2),
-                np.round(np.nanmedian(self.result_df["sac_amp_dva"]), 2),
-            ]
-        for i in [0, 1]:
-            if title:
-                ax2[i].set_title(
-                    f"{dataname[i]} mean amp: {mean[i]}DVA (median: {median[i]}DVA)"
-                )
-            ax2[i].set_xlabel("Saccade amplitude [DVA]")
-            ax2[i].set_xlim([0, 50])
-
-        # saccade angle to horizontal RATIO OF I SAC
-        fig3, ax3 = plt.subplots(1, 2, dpi=150, figsize=(10, 3))
-        sns.histplot(
-            data=self.Dataset.gt_foveation_df,
-            x="sac_angle_h",
-            hue=hue,
-            hue_order=hue_order,
-            kde=True,
-            ax=ax3[0],
-            multiple="dodge",
-        )  # , bins=20)
-        sns.histplot(
-            data=self.result_df,
-            x="sac_angle_h",
-            hue=hue,
-            hue_order=hue_order,
-            kde=True,
-            ax=ax3[1],
-            multiple="dodge",
-        )  # , bins=20)
-        if title:
-            ratio = [
-                np.round(
-                    100
-                    * len(
-                        self.Dataset.gt_foveation_df[
-                            self.Dataset.gt_foveation_df["fov_category"] == "I"
-                        ]
-                    )
-                    / len(self.Dataset.gt_foveation_df),
-                    2,
-                ),
-                np.round(
-                    100
-                    * len(self.result_df[self.result_df["fov_category"] == "I"])
-                    / len(self.result_df),
-                    2,
-                ),
-            ]
-        for i in [0, 1]:
-            if title:
-                ax3[i].set_title(
-                    f"{dataname[i]} ratio of Inspection events: {ratio[i]}%"
-                )
-            ax3[i].set_xlabel("Saccade angle to horizontal [degree]")
-
-        # saccade angle relative to previous saccade  RATIO OF B SAC
-        fig4, ax4 = plt.subplots(1, 2, dpi=150, figsize=(10, 3))
-        sns.histplot(
-            data=self.Dataset.gt_foveation_df,
-            x="sac_angle_p",
-            hue=hue,
-            hue_order=hue_order,
-            kde=True,
-            ax=ax4[0],
-            multiple="dodge",
-        )  # , bins=20)
-        sns.histplot(
-            data=self.result_df,
-            x="sac_angle_p",
-            hue=hue,
-            hue_order=hue_order,
-            kde=True,
-            ax=ax4[1],
-            multiple="dodge",
-        )  # , bins=20)
-        if title:
-            ratio = [
-                np.round(
-                    100
-                    * len(
-                        self.Dataset.gt_foveation_df[
-                            self.Dataset.gt_foveation_df["fov_category"] == "B"
-                        ]
-                    )
-                    / len(self.Dataset.gt_foveation_df),
-                    2,
-                ),
-                np.round(
-                    100
-                    * len(self.result_df[self.result_df["fov_category"] == "B"])
-                    / len(self.result_df),
-                    2,
-                ),
-            ]
-        for i in [0, 1]:
-            if title:
-                ax4[i].set_title(
-                    f"{dataname[i]} ratio of Background events: {ratio[i]}%"
-                )
-            ax4[i].set_xlabel("Saccade turning angle [degree]")
-
-        # returntimes RATIO OF R SAC
-        fig5, ax5 = plt.subplots(1, 2, dpi=150, figsize=(10, 3))
-        sns.histplot(
-            self.Dataset.gt_foveation_df.ret_times, kde=True, ax=ax5[0]
-        )  # , bins=100)
-        sns.histplot(self.result_df.ret_times, kde=True, ax=ax5[1])  # , bins=100)
-        if title:
-            ratioR = [
-                np.round(
-                    100
-                    * len(
-                        self.Dataset.gt_foveation_df[
-                            self.Dataset.gt_foveation_df["fov_category"] == "R"
-                        ]
-                    )
-                    / len(self.Dataset.gt_foveation_df),
-                    2,
-                ),
-                np.round(
-                    100
-                    * len(self.result_df[self.result_df["fov_category"] == "R"])
-                    / len(self.result_df),
-                    2,
-                ),
-            ]
-            ratioD = [
-                np.round(
-                    100
-                    * len(
-                        self.Dataset.gt_foveation_df[
-                            self.Dataset.gt_foveation_df["fov_category"] == "D"
-                        ]
-                    )
-                    / len(self.Dataset.gt_foveation_df),
-                    2,
-                ),
-                np.round(
-                    100
-                    * len(self.result_df[self.result_df["fov_category"] == "D"])
-                    / len(self.result_df),
-                    2,
-                ),
-            ]
-        for i in [0, 1]:
-            if title:
-                ax5[i].set_title(
-                    f"{dataname[i]} ratio Revisits: {ratioR[i]}%, Detections: {ratioD[i]}%"
-                )
-            ax5[i].set_xlabel("Return time [ms]")
-
-        plt.show()
-
-    def show_fovdur_pervid(self):
-        """
-        TODO: Maybe kick this? can be very missleading...
-        Function that plots the mean foveation duration per video (and the overall mean as line) for
-        the simulated (x, --) and the ground truth (o, :) data.
-        """
-        assert (
-            len(self.result_df) > 0
-        ), "`result_df` is empty, make sure to run `evaluate_all_to_df` first!"
-        videos = self.result_df.video.unique()
-        categories = ["B", "D", "I", "R"]
-        colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
-        fig, ax = plt.subplots(dpi=150)
-        fovdurs_pervid_BDIR_sim = []
-        fovdurs_pervid_BDIR_gt = []
-        fovdurs_means_BDIR_sim = []
-        fovdurs_means_BDIR_gt = []
-
-        df_gt = self.Dataset.gt_foveation_df
-        for cat in categories:
-            fovdurs_pervid_BDIR_gt.append(
-                [
-                    np.mean(
-                        df_gt.duration_ms[
-                            (df_gt.video == vid) & (df_gt.fov_category == cat)
-                        ].values
-                    )
-                    for vid in videos
-                ]
-            )
-            fovdurs_means_BDIR_gt.append(
-                np.mean(df_gt.duration_ms[df_gt.fov_category == cat].values)
-            )
-            fovdurs_pervid_BDIR_sim.append(
-                [
-                    np.mean(
-                        self.result_df.duration_ms[
-                            (self.result_df.video == vid)
-                            & (self.result_df.fov_category == cat)
-                        ].values
-                    )
-                    for vid in videos
-                ]
-            )
-            fovdurs_means_BDIR_sim.append(
-                np.mean(
-                    self.result_df.duration_ms[
-                        self.result_df.fov_category == cat
-                    ].values
-                )
-            )
-
-        overall_mean_gt = [
-            np.mean(df_gt.duration_ms[df_gt.video == vid].values) for vid in videos
-        ]
-        overall_mean_sim = [
-            np.mean(self.result_df.duration_ms[self.result_df.video == vid].values)
-            for vid in videos
-        ]
-
-        for i, cat in enumerate(categories):
-            ax.axhline(fovdurs_means_BDIR_gt[i], ls=":", color=colors[i], alpha=0.5)
-            ax.axhline(fovdurs_means_BDIR_sim[i], ls="--", color=colors[i])
-            ax.plot(
-                fovdurs_pervid_BDIR_gt[i], ls="", marker="o", color=colors[i], alpha=0.5
-            )
-            ax.plot(
-                fovdurs_pervid_BDIR_sim[i],
-                ls="",
-                marker="x",
-                color=colors[i],
-                label=cat,
-            )
-        ax.plot(overall_mean_sim, ls="", marker="x", color="k", label=r"$\mu$")
-        ax.plot(overall_mean_gt, ls="", marker="o", color="k", alpha=0.5)
-        ax.set_xticks(range(len(videos)))
-        ax.set_xticklabels(videos, rotation=45, ha="right", rotation_mode="anchor")
-        plt.legend()
-        plt.show()
-
-    def video_output_gif(
-        self, videoname, storagename, interpolate=False, slowgif=False
-    ):
+    def video_output_gif(self, videoname, storagename, slowgif=False, dpi=100):
         """
         General function that takes all the predicted scanpaths and plots it on top
         of the original video. No further details are visualized, hence it is model agnostic.
+
+        :param storagename: Name of the file, will be appended to outputpath +".gif"
+        :type storagename: str
+        :param slowgif: If true, store it with 10fps, otherwise 30fps, defaults to False
+        :type slowgif: bool, optional
+        :param dpi: DPI for each frame when created and stored gif, defaults to 100
+        :type dpi: int, optional
         """
         if hasattr(self.Dataset, "outputpath"):
             outputpath = self.Dataset.outputpath + storagename
         else:
-            hasattr(self.Dataset, "PATH"), "Dataset has no defined PATH"
             outputpath = f"{self.Dataset.PATH}results/{storagename}"
 
         assert (
             videoname in self.result_dict
         ), f"No simulated scanpaths for {videoname} yet, first run the model!"
         res_dict = self.result_dict[videoname]
+        # load frames of the original video (never used by the model)
         vidlist = self.Dataset.load_videoframes(videoname)
 
         @gif.frame
         def frame(f):
-            fig, ax = plt.subplots(figsize=(10, 7))
+            fig, ax = plt.subplots(figsize=(10, 7), dpi=dpi)
             ax.imshow(vidlist[f])
-            # ax.imshow(gt_map[f,:,:], vmax=vmax_gt, cmap='gray', alpha=0.6)
             for key in res_dict.keys():
                 ax.scatter(
                     res_dict[key]["gaze"][f][1],
@@ -893,32 +618,12 @@ class Model:
                         linewidth=7,
                         ls=":",
                     )
-            # ax.set_title(f"Ground truth vs prediction for DV $ \theta={dvthres}, \sigma={dvnoise}$, {name}, Frame: {f}")
             ax.set_axis_off()
 
         out = [frame(i) for i in range(len(vidlist))]
         if slowgif:
             gif.save(out, outputpath + "_slow.gif", duration=100)
             print(f"Saved to {outputpath}_slow.gif")
-            # gif.save(out, f"videos/objvideo_{name}_{vidname}_thres_dv{thres_dv}_sig_dv{sig_dv}_ior_decay{ior_decay}_att_obj{att_obj}_att_dva{att_dva}_rs{rs}_slow.gif", duration=100)
         else:
             gif.save(out, outputpath + ".gif", duration=33)
             print(f"Saved to {outputpath}.gif")
-            # gif.save(out, f"videos/objvideo_{name}_{vidname}_thres_dv{thres_dv}_sig_dv{sig_dv}_ior_decay{ior_decay}_att_obj{att_obj}_att_dva{att_dva}_rs{rs}.gif", duration=33)
-
-        # raise Exception("Not yet implemented!")
-
-    #######################################################################
-    ##########                NOT YET IMPLEMENTED                ##########
-    #######################################################################
-
-    def store_model_with_results(self, storagename):
-        """TODO: Method that stores the model with parameters and simulation results
-        Right now, say explicitely what should be stored in pypet!
-        """
-        if hasattr(self.Dataset, "outputpath"):
-            outputpath = self.Dataset.outputpath + storagename
-        else:
-            assert hasattr(self.Dataset, "PATH"), "Dataset has no defined PATH"
-            outputpath = f"{self.Dataset.PATH}results/{storagename}"
-        raise Exception("Not yet implemented!")

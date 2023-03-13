@@ -140,6 +140,9 @@ class Dataset:
             self.testset = datadict["testset"]
         else:
             self.testset = None
+        # path for storing visualizations
+        if "outputpath" in datadict:
+            self.outputpath = datadict["outputpath"]
 
         # Check if a path to the ground truth foveation evaluation dataframe is provided.
         # If not, there should be the path to the files and a function to do this evaluation in a class method.
@@ -159,7 +162,6 @@ class Dataset:
                 ]
             else:
                 self.test_foveation_df = pd.DataFrame()
-
         else:
             assert (
                 "eye_tracking_data" in datadict
@@ -174,11 +176,10 @@ class Dataset:
                 self.PATH + datadict["gt_fovframes_nss_df"],
                 usecols=["frame", "x", "y", "subject", "video", "nss"],
             )
-        else:
-            assert (
-                "eye_tracking_data" in datadict
-            ), f"GT eye tracking data needed in dataconfig to calculate NSS scores!"
+        elif "eye_tracking_data" in datadict:
             self.gt_fovframes_nss_df = self.create_nss_df(datadict["eye_tracking_data"])
+        else:
+            self.gt_fovframes_nss_df = None
 
     def load_yaml(self, path):
         """

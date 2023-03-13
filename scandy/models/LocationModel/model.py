@@ -3,7 +3,7 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 import gif
-import flow_vis as fv
+import flow_vis
 
 # from . import videoRun as vr
 from ..model import Model
@@ -20,10 +20,18 @@ class LocationModel(Model):
     description = "Basic location-based model with calculations on a pixel level."
 
     def __init__(self, Dataset, params=None, preload_res_df=None):
+        """
+        Initialize the model. IOR and decision variables for each pixel.
 
+        :param Dataset: Data for which the model will be run
+        :type Dataset: Dataset class
+        :param params: Model parameters, loaded internally, defaults to None
+        :type params: dict, optional
+        :param preload_res_df: Only if computations were already done, defaults to None
+        :type preload_res_df: DataFrame, optional
+        """
         self.Dataset = Dataset
         self.params = params
-
         # load default parameters if none were given
         if self.params is None:
             self.params = self.load_default_modelparams()
@@ -36,7 +44,7 @@ class LocationModel(Model):
         )
 
         # Attributes that are updated when loading a video
-        self.video_data = None
+        self.video_data = {}
         # Attributes that are updated when running the model for a single video
         self._scanpath = []
         self._f_sac = []
@@ -44,7 +52,7 @@ class LocationModel(Model):
         self._new_target = None
         self._prev_loc = np.zeros(2, int)  # self.params["startpos"].copy()
         self._current_frame = 0
-        # location based maps
+        # pixel-based maps for the different moduls
         self._feature_map = np.zeros((self.Dataset.VID_SIZE_Y, self.Dataset.VID_SIZE_X))
         self._ior_map = np.zeros_like(self._feature_map)
         self._sens_map = np.zeros_like(self._feature_map)
@@ -56,7 +64,15 @@ class LocationModel(Model):
         # self._all_features = [] # only if features are modified, otherwise save memory
 
     def load_default_modelparams(self):
+        """
+        Defines the model specifications, most importantly the feature map (defaults
+        to low-level features with anisotropic center bias).
+        Free parameters that should be adapted are ior_decay, ior_dva, att_dva,
+        ddm_thres, ddm_sig.
 
+        :return: Parameter dictionary
+        :rtype: dict
+        """
         par = dotdict({})
 
         # random seed for a scanpath simulation, is set in the model.run function
@@ -93,13 +109,42 @@ class LocationModel(Model):
 
         return par
 
+    def reinit_for_sgl_run(self):
+        """
+        Reinitialize the model such that all parameters which might be updated
+        in a simulation run are back in their initial state.
+        """
+        self._scanpath = []
+        self._f_sac = []
+        self._current_frame = 0
+        self._new_target = None
+        self._prev_loc = np.zeros(2, int)
+        self._gaze_loc = np.zeros(2, int)
+        self._decision_map.fill(0.0)
+        self._ior_map.fill(0.0)
+        self._sens_map.fill(0.0)
+        self._feature_map.fill(0.0)
+        # Stored maps for a single run for visualization
+        self._all_dvs = []
+        self._all_iors = []
+        self._all_sens = []
+
     def update_features(self):
-        # TRYOUT: could use a time-dependent center bias
-        assert self.video_data is not None, "Video data not loaded"
+        """
+        Modul (I): Scene features
+        Current frame of the features, loaded as specified in the model parameters.
+
+        TRYOUT: could use a time-dependent center bias
+        """
         self._feature_map = self.video_data["feature_maps"][self._current_frame]
 
     def update_sensitivity(self):
-        # TRYOUT: check if object is foveated and if so, spread across mask
+        """
+        Modul (II): Visual sensitivity
+        Visual sensitivity map, Gaussian spread around the gaze point.
+
+        TRYOUT: check if object is foveated and if so, spread across mask
+        """
         assert self.params is not None, "Model parameters not loaded"
         gaze_gaussian = uf.gaussian_2d(
             self._gaze_loc[1],
@@ -112,8 +157,14 @@ class LocationModel(Model):
         if self.params["sglrun_return"]:
             self._all_sens.append(self._sens_map.copy())
 
-    # def update_ior(self, ior_map, gaze_loc, new_target, prev_loc):
     def update_ior(self):
+        """
+        Modul (III): Scanpath history
+        Location-based inhibition of return.
+
+        TRYOUT: instead of setting the inhibition from zero to one, increase it
+        over time.
+        """
         assert self.params is not None, "Model parameters not loaded"
         # if saccade was done in the last frame, add new inhibition
         if self._new_target is not None:
@@ -131,22 +182,14 @@ class LocationModel(Model):
         if self.params["sglrun_return"]:
             self._all_iors.append(self._ior_map.copy())
 
-    # def update_decision(self, V, F, S, I):
     def update_decision(self):
         """
         Modul (IV): Decision making
-
         Updates the pixel-wise accumulated evidence V, based on the feature map F,
         the sensitivity S, and the inhibition I of the current frame.
 
-        :param V: Pixel-wise accumulated evidence,
-        :type V: np.ndarray
-        :param F: Feature map of the current frame, loaded in modul I
-        :type F: np.ndarray
-        :param S: Sensitivity map of the current frame, updated in modul II
-        :type S: np.ndarray
-        :param I: Inhibition map of the current frame, updated in modul III
-        :type I: np.ndarray
+        TRYOUT: After a decision is made, instead of reseting the decision variables
+        to zero, keep some evidence in memory and to *= self.params["ddm_reset"].
         """
         assert self.params is not None, "Model parameters not loaded"
 
@@ -167,18 +210,21 @@ class LocationModel(Model):
             )
             # reset decision variables for all pixels
             self._decision_map.fill(0)
-            # TRYOUT: We could set to self.params["ddm_reset"] instead of 0
             # self._decision_map *= self.params["ddm_reset"]
-
         else:
             self._new_target = None
         if self.params["sglrun_return"]:
             self._all_dvs.append(self._decision_map)
 
-    # def update_gaze(self, frame, gaze_loc, target):
     def update_gaze(self):
+        """
+        Module(V): Gaze update
+        Either make saccade to the target pixel, or follow the optical flow while
+        doing smooth pursuit and fixational eye movements.
+
+        TRYOUT: Saccade could be inaccurate, might lead to follow-up saccades.
+        """
         assert self.params is not None, "Model parameters not loaded"
-        assert self.video_data is not None, "Video data not loaded"
         self._prev_loc = self._gaze_loc.copy()
         if self._new_target is not None:
             # if there is a new saccade target, set gaze location accurately to target
@@ -206,38 +252,18 @@ class LocationModel(Model):
         self._gaze_loc[0] = max(min(self._gaze_loc[0], self.Dataset.VID_SIZE_Y - 1), 0)
         self._gaze_loc[1] = max(min(self._gaze_loc[1], self.Dataset.VID_SIZE_X - 1), 0)
 
-    def reinit_for_sgl_run(self):
+    def write_sgl_output_gif(self, storagename, slowgif=False, dpi=100):
         """
-        Reinitialize the model such that all parameters which might be updated
-        in a simulation run are back in their initial state.
-        """
-        self._scanpath = []
-        self._f_sac = []
-        self._current_frame = 0
-        self._new_target = None
-        self._prev_loc = np.zeros(2, int)  # self.params["startpos"].copy()
-        self._gaze_loc = np.zeros(2, int)  # self.params["startpos"].copy()
-        self._decision_map.fill(0.0)
-        self._ior_map.fill(0.0)
-        self._sens_map.fill(0.0)
-        self._feature_map.fill(0.0)
-        self._all_dvs = []
-        self._all_iors = []
-        self._all_sens = []
-        # if self.params["sglrun_return"]:
-        #     self._all_dvs.append(self._decision_map)
-        #     self._all_iors.append(self._ior_map)
-        #     self._all_sens.append(self._sens_map)
+        Visualize the single trial run and save it as a gif.
 
-    #########
-    ## TODO !!!
-    ## Would be better to pass the sensitivity map...
-    #########
+        Illustrates what is happening in the 5 modules for each frame.
 
-    def write_sgl_output_gif(self, storagename, slowgif=False):
-        """TODO: Write nice and general visualization function based on self.visual_vars
-        This function produces a GIF for a single run (seed) for a single video.
-        It shows the evidence, sensitivity, feature, IOR, and object/OF map.
+        :param storagename: Name of the file, will be appended to outputpath +".gif"
+        :type storagename: str
+        :param slowgif: If true, store it with 10fps, otherwise 30fps, defaults to False
+        :type slowgif: bool, optional
+        :param dpi: DPI for each frame when created and stored gif, defaults to 100
+        :type dpi: int, optional
         """
         assert (
             self.params["sglrun_return"] == True
@@ -247,90 +273,77 @@ class LocationModel(Model):
         else:
             outputpath = f"{self.Dataset.PATH}results/{storagename}"
 
-        # video_data not necessary, can be loaded in function based on knowledge of video name (key in result_dict)
         vidname = next(iter(self.result_dict))
         runname = next(iter(self.result_dict[vidname]))
-        res_dict = self.result_dict[vidname][runname]
-        thres_dv = self.params["ddm_thres"]
-        # sig_dv = self.params['ddm_sig']
-        # ior_decay = self.params['ior_decay']
-        # att_obj = self.params['intraobjatt']
-        # att_dva = self.params['sensitivity']
-        # rs = ddmpar['rs']
 
-        video_data = self.load_videodata(vidname)
         vidlist = self.Dataset.load_videoframes(vidname)
-        feature_maps = self.video_data["feature_maps"]
-        F_max = np.max(feature_maps)
-        # TODO: do 0th element in simulation code, not here...
-        DVs = np.concatenate(
-            (
-                np.zeros((1, self.Dataset.VID_SIZE_Y, self.Dataset.VID_SIZE_X)),
-                res_dict["DVs"],
-            )
-        )
-        IORs = np.concatenate(
-            (
-                np.ones((1, video_data["VID_SIZE_Y"], video_data["VID_SIZE_X"])),
-                res_dict["IORs"],
-            )
-        )
-        OFs = np.concatenate(
-            (
-                np.zeros((1, video_data["VID_SIZE_Y"], video_data["VID_SIZE_X"], 2)),
-                video_data["flow_maps"],
-            )
-        )
+        F_max = np.max(self.video_data["feature_maps"])
 
         @gif.frame
         def frame(f):
-            S = uf.gaussian_2d(
-                res_dict["gaze"][f][1],
-                res_dict["gaze"][f][0],
-                video_data["VID_SIZE_X"],
-                video_data["VID_SIZE_Y"],
-                self.params["att_dva"] * video_data["DVA_TO_PX"],
-                sumnorm=False,
+            fig, axs = plt.subplots(2, 3, figsize=(10, 4.5), dpi=dpi)
+            axs[0, 0].imshow(
+                self.video_data["feature_maps"][f], cmap="inferno", vmin=0, vmax=F_max
             )
-            F = feature_maps[f]
-
-            fig = plt.figure(figsize=(7, 8), dpi=150)
-            gs = fig.add_gridspec(4, 2)
-            ax0 = fig.add_subplot(gs[0:2, :])
-            ax1 = fig.add_subplot(gs[2, 0])
-            ax2 = fig.add_subplot(gs[2, 1])
-            ax3 = fig.add_subplot(gs[3, 0])
-            ax4 = fig.add_subplot(gs[3, 1])
-            ax0.imshow(vidlist[f])
-            ax0.imshow(DVs[f], vmin=0, vmax=thres_dv, cmap="Reds", alpha=0.5)
-            ax0.set_title("Decision Varaible")
-            ax1.imshow(S, cmap="bone", vmin=0, vmax=1)
-            ax1.set_title("Sensitivity")
-            ax2.imshow(F, cmap="inferno", vmin=0, vmax=F_max)  # , alpha=0.5)
-            ax2.set_title("Features (incl. center bias)")
-            ax3.imshow(IORs[f], cmap="bone", vmin=0, vmax=1)
-            ax3.set_title("Inhibition of Return")
-            flow_color = fv.flow_to_color(OFs[f], convert_to_bgr=False)
-            ax4.imshow(flow_color)
-            ax4.set_title("Optical Flow")
-            for i, ax in enumerate([ax0, ax1, ax2, ax3, ax4]):
-                if i == 0:
-                    markersize = 800
-                else:
-                    markersize = 200
+            axs[0, 0].set_title("(I) Scene features")
+            axs[0, 1].imshow(self._all_sens[f], cmap="bone", vmin=0, vmax=1)
+            axs[0, 1].set_title("(II) Visual sensitivity")
+            axs[0, 2].imshow(1 - self._all_iors[f], cmap="bone", vmin=0, vmax=1)
+            axs[0, 2].set_title("(III) Scanpath history")
+            axs[1, 0].imshow(vidlist[f + 1])
+            axs[1, 0].set_title(f"Video frame {f:03d}")
+            axs[1, 1].imshow(
+                self._all_dvs[f],
+                vmin=0,
+                vmax=self.params["ddm_thres"],
+                cmap="Reds",
+                alpha=0.5,
+            )
+            axs[1, 1].set_title("(IV) Decision making")
+            flow_color = flow_vis.flow_to_color(
+                self.video_data["flow_maps"][f], convert_to_bgr=False
+            )
+            axs[1, 2].imshow(flow_color)
+            axs[1, 2].set_title("(V) Gaze update")
+            for ax in axs.flat:
                 ax.scatter(
-                    res_dict["gaze"][f][1],
-                    res_dict["gaze"][f][0],
-                    s=markersize,
+                    self.result_dict[vidname][runname]["gaze"][f][1],
+                    self.result_dict[vidname][runname]["gaze"][f][0],
+                    s=300,
                     c="green",
-                    marker="+",  # type: ignore
+                    marker="x",
+                    lw=2,
                 )
                 ax.axis("off")
+            axs[1, 2].scatter(
+                self.result_dict[vidname][runname]["gaze"][f + 1][1],
+                self.result_dict[vidname][runname]["gaze"][f + 1][0],
+                s=300,
+                facecolors="none",
+                edgecolors="r",
+                marker="o",
+                lw=3,
+                alpha=0.75,
+            )
+            axs[1, 2].arrow(
+                self.result_dict[vidname][runname]["gaze"][f][1],
+                self.result_dict[vidname][runname]["gaze"][f][0],
+                self.result_dict[vidname][runname]["gaze"][f + 1][1]
+                - self.result_dict[vidname][runname]["gaze"][f][1],
+                self.result_dict[vidname][runname]["gaze"][f + 1][0]
+                - self.result_dict[vidname][runname]["gaze"][f][0],
+                head_width=15,
+                head_length=15,
+                fc="k",
+                ec="k",
+                lw=2,
+                alpha=0.75,
+                length_includes_head=True,
+            )
+            fig.set_facecolor("lightgrey")
             plt.tight_layout()
-            # plt.savefig(f'videos/vid_fig/{f:03d}.png', pad_inches=0, dpi=150); plt.close()
 
-        nframes = feature_maps.shape[0]
-        out = [frame(i) for i in range(nframes)]
+        out = [frame(i) for i in range(len(self._all_dvs))]
         if slowgif:
             gif.save(out, outputpath + "_slow.gif", duration=100)
             # gif.save(out, f"videos/objvideo_{name}_{vidname}_thres_dv{thres_dv}_sig_dv{sig_dv}_ior_decay{ior_decay}_att_obj{att_obj}_att_dva{att_dva}_rs{rs}_slow.gif", duration=100)
