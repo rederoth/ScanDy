@@ -13,7 +13,7 @@ For a visual guide of how `ScanDy` works, have a look at the [interactive notebo
 
 The structure of `ScanDy` is inspired by the `neurolib` framework, which is also used for parameter optimization and exploration.
 <p align="center">
-  <img src="https://github.com/rederoth/ScanDy/software_architecture.png">
+  <img src="https://github.com/rederoth/ScanDy/blob/main/software_architecture.png">
 </p>
 Scanpath models inherit from the `Model` base class, whose functionality includes initializing and running model simulations and the evaluation and visualization of the resulting scanpaths. Models are implemented in a modular way, consiting of moules for (I) Scene features, (II) Visual sensitivity, (III) Scanpath history, (IV) Decision making, and (V) Gaze update.
 
