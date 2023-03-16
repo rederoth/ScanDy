@@ -62,12 +62,15 @@ If `ScanDy` is useful for your research, please cite our preprint:
  publisher = {Cold Spring Harbor Laboratory},}
 ```
 
-|
+### Contact
 
- Nicolas Roth [mail](mailto:roth@tu-berlin.de)
+ If you have feedback, questions, and/or ideas, feel free to send a [mail](mailto:roth@tu-berlin.de) to Nico.
 
-Cluster of Excellence Science of Intelligence & Institut für Softwaretechnik und Theoretische Informatik,
-Technische Universität Berlin, Marchstraße 23, 10587 Berlin, Germany
+Nicolas Roth,
+PhD Student at Science of Intelligence;
+Neural Information Processing Group,
+Fakultaet IV, Technische Universitaet Berlin,
+MAR 5-6, Marchstr. 23, 10587 Berlin
 
 ### Acknowledgments
 
