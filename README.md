@@ -1,6 +1,9 @@
-# ScanDy
+<p align="center">
+  <img src="https://github.com/rederoth/ScanDy/blob/main/docs/scandy_repo_card.png">
+</p>
+<!-- # ScanDy
 
-Simulating Realistic Human Scanpaths in Dynamic Real-World Scenes
+Simulating Realistic Human Scanpaths in Dynamic Real-World Scenes -->
 
 ## Introduction
 
@@ -13,7 +16,7 @@ For a visual guide of how `ScanDy` works, have a look at the [interactive notebo
 
 The structure of `ScanDy` is inspired by the `neurolib` framework, which is also used for parameter optimization and exploration.
 <p align="center">
-  <img src="https://github.com/rederoth/ScanDy/blob/main/software_architecture.png">
+  <img src="https://github.com/rederoth/ScanDy/blob/main/docs/software_architecture.png">
 </p>
 Scanpath models inherit from the `Model` base class, whose functionality includes initializing and running model simulations and the evaluation and visualization of the resulting scanpaths. Models are implemented in a modular way, consiting of moules for (I) Scene features, (II) Visual sensitivity, (III) Scanpath history, (IV) Decision making, and (V) Gaze update.
 
@@ -36,9 +39,8 @@ To prepare the dataset, we used the following resources:
 To get started with `ScanDy`, have a look at the example [IPython Notebooks](examples/). There we show instructive usecases, including:
 
 * [Example 1](examples/ex1_scanpath_sgl_video.ipynb): Scanpath simulation and visualization for a single video
-* [Example 2](examples/ex2_model_comparison.ipynb): Evolutionary optimization of model parameters 
+* [Example 2](examples/ex2_model_comparison.ipynb): Evolutionary optimization of model parameters
 * [Example 3](examples/ex3_model_extension.ipynb): Extending on existing models: Location-based model with object-based sensitivity
-
 
 ## More information
 
@@ -49,16 +51,15 @@ If `ScanDy` is useful for your research, please cite our preprint:
 
 ```bibtex
 @article{roth2023objects,
-  title={Objects guide human gaze behavior in dynamic real-world scenes},
-  author={Roth, Nicolas and Rolfs, Martin and Hellwich, Olaf and Obermayer, Klaus},
-  journal={bioRxiv},
-  pages={2023--03},
-  year={2023},
-  publisher={Cold Spring Harbor Laboratory}
-}
+ title = {Objects Guide Human Gaze Behavior in Dynamic Real-World Scenes},
+ author = {Roth, Nicolas and Rolfs, Martin and Hellwich, Olaf and Obermayer, Klaus},
+ elocation-id = {2023.03.14.532608},
+ year = {2023},
+ doi = {10.1101/2023.03.14.532608},
+ publisher = {Cold Spring Harbor Laboratory},}
 ```
+|
 
-### Contact
 
  Nicolas Roth [mail](mailto:roth@tu-berlin.de)
 
