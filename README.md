@@ -2,7 +2,6 @@
   <img src="https://github.com/rederoth/ScanDy/blob/main/docs/scandy_repo_card.png">
 </p>
 <!-- # ScanDy
-
 Simulating Realistic Human Scanpaths in Dynamic Real-World Scenes -->
 
 ## Introduction
@@ -10,7 +9,7 @@ Simulating Realistic Human Scanpaths in Dynamic Real-World Scenes -->
 `ScanDy` is a modular and mechanistic computational framework for simulating realistic **scan**paths in **dy**namic real-world scenes. It is specifically designed to quantitatively test hypotheses about eye-movement behavior in videos.
 Specifically, it can be used to demonstrate the influence of object-representations on gaze behavior by comparing object-based and location-based models.
 
-For a visual guide of how `ScanDy` works, have a look at the [interactive notebook](https://github.com/rederoth/ScanDy/blob/main/examples/interactive_model_visu.ipynb) and the <a href="#example-usecases">example usecases</a>.
+For a visual guide of how `ScanDy` works, have a look at the [interactive notebook](examples/interactive_guide.ipynb) and the <a href="#examples">example usecases</a>.
 
 ## Software architecture
 
@@ -34,9 +33,13 @@ To prepare the dataset, we used the following resources:
 * [TASED-Net](https://github.com/MichiganCOG/TASED-Net/) - High-level saliency maps
 * [PWC-Net](https://github.com/NVlabs/PWC-Net/) - Optical flow calculation
 
-## Example usecases
+## Examples
 
-To get started with `ScanDy`, have a look at the example [IPython Notebooks](examples/). There we show instructive usecases, including:
+We prepared a number of [IPython Notebooks](examples/) for you to explore the framework.
+
+To get started with `ScanDy`, have a look at our [interactive guide](examples/interactive_guide.ipynb), where you can explore the effect of individual model parameters.
+
+Additionally, we show instructive usecases, including:
 
 * [Example 1](examples/ex1_scanpath_sgl_video.ipynb): Scanpath simulation and visualization for a single video
 * [Example 2](examples/ex2_model_comparison.ipynb): Evolutionary optimization of model parameters
@@ -58,8 +61,8 @@ If `ScanDy` is useful for your research, please cite our preprint:
  doi = {10.1101/2023.03.14.532608},
  publisher = {Cold Spring Harbor Laboratory},}
 ```
-|
 
+|
 
  Nicolas Roth [mail](mailto:roth@tu-berlin.de)
 
