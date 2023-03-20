@@ -1,6 +1,12 @@
 <p align="center">
   <img src="https://github.com/rederoth/ScanDy/blob/main/docs/scandy_repo_card.png">
 </p>
+<p align="center">
+  <a href="https://github.com/psf/black">
+  	<img alt="Code style: black" src="https://img.shields.io/badge/code%20style-black-000000.svg"></a>
+  <a href="https://doi.org/10.1101/2023.03.14.532608">
+    <img alt="paper" src="https://img.shields.io/badge/preprint-10.1101%2F2023.03.14.532608-blue"></a>    
+</p>
 <!-- # ScanDy
 Simulating Realistic Human Scanpaths in Dynamic Real-World Scenes -->
 
@@ -19,9 +25,28 @@ The structure of `ScanDy` is inspired by the `neurolib` framework, which is also
 </p>
 Scanpath models inherit from the `Model` base class, whose functionality includes initializing and running model simulations and the evaluation and visualization of the resulting scanpaths. Models are implemented in a modular way, consiting of moules for (I) Scene features, (II) Visual sensitivity, (III) Scanpath history, (IV) Decision making, and (V) Gaze update.
 
+## Installation
+
+You can install `ScanDy` as pypi package using `pip`:
+
+```
+pip install scandy
+```
+
+We however reccomend that you clone (or fork) this repository and install all dependencies with
+
+```
+git clone https://github.com/rederoth/ScanDy.git
+cd neurolib/
+pip install -r requirements.txt
+pip install .
+```
+
+This gives you more freedom to modify the existing models and run the examples.
+
 ## Dataset
 
-The scanpath models require precomputed maps of the video data. We use the VidCom dataset (Li et al., 2011), for which we provide the required data in the following folder: <https://tubcloud.tu-berlin.de/s/f7LTZATZXEjWwta>.
+The scanpath models require precomputed maps of the video data. We use the VidCom dataset (Li et al., 2011), for which we provide all the required data on OSF (https://www.doi.org/10.17605/OSF.IO/83XUC).
 
 To prepare the dataset, we used the following resources:
 
@@ -32,6 +57,8 @@ To prepare the dataset, we used the following resources:
 * [dynamic-proto-object-saliency](https://github.com/csmslab/dynamic-proto-object-saliency/) - Low-level saliency maps
 * [TASED-Net](https://github.com/MichiganCOG/TASED-Net/) - High-level saliency maps
 * [PWC-Net](https://github.com/NVlabs/PWC-Net/) - Optical flow calculation
+
+If you only want to play around with a single video, we uploaded a version of the dataset only containing the "field03" video to [Google drive](https://drive.google.com/drive/folders/1ICTD9ENnidJXxHSvz30Aag3WXw8eslSZ?usp=share_link).
 
 ## Examples
 

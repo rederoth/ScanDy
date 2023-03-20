@@ -3,7 +3,6 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 import gif
-import flow_vis as fv
 
 from ..model import Model
 from ..objectfile import ObjectFile
