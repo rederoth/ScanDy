@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import imageio
 import yaml
+from skimage.transform import resize
 
 from .functions import anisotropic_centerbias
 
@@ -231,13 +232,24 @@ class Dataset:
             featuremaps = 0.5 * np.ones(
                 (self.video_frames[videoname], self.VID_SIZE_Y, self.VID_SIZE_X)
             )
-        else:
+        elif os.path.exists(f"{self.featuremaps}{featuretype}/{videoname}.npy"):
             featuremaps = np.load(f"{self.featuremaps}{featuretype}/{videoname}.npy")
-            assert featuremaps.shape == (
-                self.video_frames[videoname],
-                self.VID_SIZE_Y,
-                self.VID_SIZE_X,
-            ), "Feature maps are not in shape (f,y,x)!"
+        else:
+            frame_pngs = sorted(os.listdir(f"{videoname}/frames/"))
+            featuremaps = np.zeros(
+                (self.video_frames[videoname], self.VID_SIZE_Y, self.VID_SIZE_X),
+                dtype=np.float32,
+            )
+            for i in range(self.video_frames[videoname]):
+                featuremaps[i] = resize(
+                    imageio.imread(f"{videoname}/frames/{frame_pngs[i]}"), (540, 960)
+                )
+
+        assert featuremaps.shape == (
+            self.video_frames[videoname],
+            self.VID_SIZE_Y,
+            self.VID_SIZE_X,
+        ), "Feature maps are not in shape (f,y,x)!"
         if centerbias is None:
             return featuremaps
         elif centerbias == "anisotropic_default":
