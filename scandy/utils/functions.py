@@ -156,7 +156,7 @@ def fix_hist_step_vertical_line_at_end(ax):
         poly.set_xy(poly.get_xy()[:-1])
 
 
-def plot_var_pars(model, runid, parameters, par_sym, relative_par_vals):
+def plot_var_pars(model, res_path, runid, parameters, par_sym, relative_par_vals):
     """
     Make a summary plot of a parameter exploration.
 
@@ -164,6 +164,8 @@ def plot_var_pars(model, runid, parameters, par_sym, relative_par_vals):
 
     :param model: _description_
     :type model: _type_
+    :param res_path: _description_
+    :type res_path: _type_
     :param runid: _description_
     :type runid: _type_
     :param parameters: _description_
@@ -177,7 +179,7 @@ def plot_var_pars(model, runid, parameters, par_sym, relative_par_vals):
     # load evolution results
     DILLNAME = f"{runid}.dill"
     evol = Evolution(lambda x: x, ParameterSpace(["mock"], [[0, 1]]))
-    evol = evol.loadEvolution(f"results/{runid}/{DILLNAME}")
+    evol = evol.loadEvolution(res_path + f"{runid}/{DILLNAME}")
     df_evol = evol.dfEvolution(outputs=True).copy()
 
     # Get mean parameters of last generation
@@ -196,7 +198,7 @@ def plot_var_pars(model, runid, parameters, par_sym, relative_par_vals):
             name = f"res_df_mean_{var_par}_{factor}"
             key = f"{var_par}_{factor}"
             d_res[key] = {}
-            model.result_df = pd.read_csv(f"results/{runid}/{name}.csv")
+            model.result_df = pd.read_csv(res_path + f"{runid}/{name}.csv")
             sim_dur_ms = model.result_df["duration_ms"].dropna().values
             sim_amp_dva = model.result_df["sac_amp_dva"].dropna().values
             d_res[key]["sim_dur_ms"] = sim_dur_ms
