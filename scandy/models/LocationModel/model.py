@@ -189,7 +189,7 @@ class LocationModel(Model):
         the sensitivity S, and the inhibition I of the current frame.
 
         TRYOUT: After a decision is made, instead of reseting the decision variables
-        to zero, keep some evidence in memory and to *= self.params["ddm_reset"].
+        to zero, keep some evidence in memory and multiply with self.params["ddm_reset"].
         """
         assert self.params is not None, "Model parameters not loaded"
 

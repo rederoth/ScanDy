@@ -101,7 +101,7 @@ def object_at_position(segmentationmap, xpos, ypos, radius=None):
     :param ypos: Gaze position in y direction
     :type ypos: int
     :param radius: Tolerance radius, objects within that distance of the gaze point
-    are considered to be foveated, defaults to None
+        are considered to be foveated, defaults to None
     :type radius: float, optional
     :return: Name of the object(s) at the given position / within the radius
     :rtype: str

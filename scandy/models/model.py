@@ -233,7 +233,7 @@ class Model:
         Save the model to a pickle file.
 
         :param filename: Include the full path and name of the model results, the extension
-        will be appended by `.pkl`.
+            will be appended by `.pkl`.
         :type filename: str
         """
         with open(f"{filename}.pkl", "wb") as outp:
@@ -336,7 +336,7 @@ class Model:
         :param runname: Name of the run / seed the model was run for
         :type runname: str
         :param segmentation_masks: The segmentation masks of the video should be
-        passed here, such that they dont have to be loaded for each trial, defaults to None
+            passed here, such that they dont have to be loaded for each trial, defaults to None
         :type segmentation_masks: np.array, optional
         :return: Dataframe with all relevant foveation and saccade statistics of this trial
         :rtype: pd.DataFrame

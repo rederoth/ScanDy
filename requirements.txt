@@ -4,8 +4,9 @@ numpy
 pandas
 matplotlib
 seaborn
-gif
+Pillow==9.0.0
+gif==3.0.0
+imageio[ffmpeg]
 scikit-image
-imageio
 pyyaml
 flow_vis

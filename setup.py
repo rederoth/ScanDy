@@ -11,7 +11,7 @@ with open("requirements.txt") as f:
 
 setuptools.setup(
     name="scandy",
-    version="0.0.1",
+    version="0.0.2",
     description="Simulating Realistic Human Scanpaths in Dynamic Real-World Scenes",
     long_description=long_description,
     long_description_content_type="text/markdown",
