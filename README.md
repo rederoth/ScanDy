@@ -15,7 +15,7 @@ Simulating Realistic Human Scanpaths in Dynamic Real-World Scenes -->
 `ScanDy` is a modular and mechanistic computational framework for simulating realistic **scan**paths in **dy**namic real-world scenes. It is specifically designed to quantitatively test hypotheses about eye-movement behavior in videos.
 Specifically, it can be used to demonstrate the influence of object-representations on gaze behavior by comparing object-based and location-based models.
 
-For a visual guide of how `ScanDy` works, have a look at the [interactive notebook](examples/interactive_guide.ipynb) and the <a href="#examples">example usecases</a>.
+For a visual guide of how `ScanDy` works, have a look at the [interactive notebook](examples/interactive_guide.ipynb) (also on [Colab](https://colab.research.google.com/github/rederoth/ScanDy/blob/main/examples/interactive_guide.ipynb)) and the <a href="#examples">example usecases</a>.
 
 ## Software architecture
 
@@ -68,9 +68,11 @@ To get started with `ScanDy`, have a look at our [interactive guide](examples/in
 
 Additionally, we show instructive usecases, including:
 
-* [Example 1](examples/ex1_scanpath_sgl_video.ipynb): Scanpath simulation and visualization for a single video
-* [Example 2](examples/ex2_model_comparison.ipynb): Evolutionary optimization of model parameters
-* [Example 3](examples/ex3_model_extension.ipynb): Extending on existing models: Location-based model with object-based sensitivity
+* [Example 1](examples/ex1_scanpath_sgl_video.ipynb), on [Colab](https://colab.research.google.com/github/rederoth/ScanDy/blob/main/examples/ex1_scanpath_sgl_video.ipynb): Scanpath simulation and visualization for a single video
+* [Example 2](examples/ex2_model_comparison.ipynb), on [Colab](https://colab.research.google.com/github/rederoth/ScanDy/blob/main/examples/ex2_model_comparison.ipynb): Evolutionary optimization of model parameters
+* [Example 3](examples/ex3_model_extension.ipynb), on [Colab](https://colab.research.google.com/github/rederoth/ScanDy/blob/main/examples/ex3_model_extension.ipynb): Extending on existing models: Location-based model with object-based sensitivity
+
+All figures from our manuscript (Roth et al., 2023) can be reproduced with [this notebook](examples/manuscript_results.ipynb), which is also executable on [Colab](https://colab.research.google.com/github/rederoth/ScanDy/blob/main/examples/manuscript_results.ipynb).
 
 ## More information
 
