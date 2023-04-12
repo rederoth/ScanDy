@@ -37,7 +37,7 @@ We however reccomend that you clone (or fork) this repository and install all de
 
 ```
 git clone https://github.com/rederoth/ScanDy.git
-cd neurolib/
+cd ScanDy/
 pip install -r requirements.txt
 pip install .
 ```
