@@ -44,6 +44,8 @@ pip install .
 
 This gives you more freedom to modify the existing models and run the examples.
 
+*CAVEAT*: There is currently an incompatability with Python 3.11 and the `numba` package (required by `neurolib`), see [numba/numba#8304](https://github.com/numba/numba/issues/8304). We therefore recommend using Python <=3.10 or manually installing `numba`/`neurolib`.
+
 ## Dataset
 
 The scanpath models require precomputed maps of the video data. We use the VidCom dataset (Li et al., 2011), for which we provide all the required data on OSF (https://www.doi.org/10.17605/OSF.IO/83XUC).
