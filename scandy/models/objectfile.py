@@ -71,9 +71,9 @@ class ObjectFile:
         Therefore, this update has to run for each object for each frame.
         CAVEAT: This attribute has no tolerance, different from the evaluation!
         """
-        # gaze_loc = [y,x] --> this is correct!
+        # gaze_loc = [x,y] --> this is correct!
         self.foveated = (
-            self.appears_in[frame] and self.object_maps[frame, gaze_loc[0], gaze_loc[1]]
+            self.appears_in[frame] and self.object_maps[frame, gaze_loc[1], gaze_loc[0]]
         )
 
     def update_ior(self, model_params):
@@ -97,7 +97,7 @@ class ObjectFile:
             self.ior = self._ior_tempmem * 1.0
         return self.ior
 
-    def update_evidence(self, frame, feature_map, sens_map, model_params):
+    def update_evidence(self, frame, fov_frac, feature_map, sens_map, model_params):
         """
         Accumulates evidence in favor of moving the eyes towards the object.
 
@@ -106,7 +106,9 @@ class ObjectFile:
         object is inhibited.
 
         :param frame: current frame
-        :type frame: str
+        :type frame: int
+        :param fov_frac: Fraction of the current frame that is spent foveating (not saccading)
+        :type fov_frac: float
         :param feature_map: Feature map of the current frame, loaded in modul I
         :type feature_map: np.ndarray
         :param sens_map: Sensitivity map of the current frame, updated in modul II
@@ -125,7 +127,9 @@ class ObjectFile:
                 * (1 - self.ior)
             )
 
-            self.decision_variable += mu + np.random.normal(0, model_params["ddm_sig"])
+            self.decision_variable += fov_frac * (
+                mu + np.random.normal(0, model_params["ddm_sig"])
+            )
 
         # if object is not visible in one frame, decrease the evidence by 10% (--> exponentially to zero)
         else:

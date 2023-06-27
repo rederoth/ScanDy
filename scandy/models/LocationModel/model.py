@@ -43,15 +43,6 @@ class LocationModel(Model):
             preload_res_df=preload_res_df,
         )
 
-        # Attributes that are updated when loading a video
-        self.video_data = {}
-        # Attributes that are updated when running the model for a single video
-        self._scanpath = []
-        self._f_sac = []
-        self._gaze_loc = np.zeros(2, int)  # self.params["startpos"].copy()
-        self._new_target = None
-        self._prev_loc = np.zeros(2, int)  # self.params["startpos"].copy()
-        self._current_frame = 0
         # pixel-based maps for the different moduls
         self._feature_map = np.zeros((self.Dataset.VID_SIZE_Y, self.Dataset.VID_SIZE_X))
         self._ior_map = np.zeros_like(self._feature_map)
@@ -79,7 +70,7 @@ class LocationModel(Model):
         par.rs = None
         # starting position, default is center
         par.startpos = np.array(
-            [self.Dataset.VID_SIZE_Y // 2, self.Dataset.VID_SIZE_X // 2]
+            [self.Dataset.VID_SIZE_X // 2, self.Dataset.VID_SIZE_Y // 2]
         )
         par.ior_decay = 1.0 * self.Dataset.FPS
         # Spread of Gaussian inhibition around previous fixation positions
@@ -118,7 +109,7 @@ class LocationModel(Model):
         self._f_sac = []
         self._current_frame = 0
         self._new_target = None
-        self._prev_loc = np.zeros(2, int)
+        self._prev_gaze_loc = np.zeros(2, int)
         self._gaze_loc = np.zeros(2, int)
         self._decision_map.fill(0.0)
         self._ior_map.fill(0.0)
@@ -147,8 +138,8 @@ class LocationModel(Model):
         """
         assert self.params is not None, "Model parameters not loaded"
         gaze_gaussian = uf.gaussian_2d(
-            self._gaze_loc[1],
             self._gaze_loc[0],
+            self._gaze_loc[1],
             self.Dataset.VID_SIZE_X,
             self.Dataset.VID_SIZE_Y,
             self.params["att_dva"] * self.Dataset.DVA_TO_PX,
@@ -169,8 +160,8 @@ class LocationModel(Model):
         # if saccade was done in the last frame, add new inhibition
         if self._new_target is not None:
             inhibition = uf.gaussian_2d(
-                self._prev_loc[1],
-                self._prev_loc[0],
+                self._prev_gaze_loc[0],
+                self._prev_gaze_loc[1],
                 self.Dataset.VID_SIZE_X,
                 self.Dataset.VID_SIZE_Y,
                 self.params["ior_dva"] * self.Dataset.DVA_TO_PX,
@@ -193,26 +184,33 @@ class LocationModel(Model):
         """
         assert self.params is not None, "Model parameters not loaded"
 
-        px_evidence = self._sens_map * self._feature_map * (1 - self._ior_map)
-        self._decision_map = (
-            self._decision_map
-            + px_evidence
-            + np.random.normal(0, self.params["ddm_sig"], self._decision_map.shape)
-        )
-
-        if np.max(self._decision_map) > self.params["ddm_thres"]:
-            # find the pixel that crossed the threshold ==> becomes the target
-            self._new_target = np.array(
-                np.unravel_index(
-                    np.argmax(self._decision_map), self._decision_map.shape
-                ),
-                int,
+        if self._cur_fov_frac > 0.0:
+            # update decision variables
+            px_evidence = self._sens_map * self._feature_map * (1 - self._ior_map)
+            self._decision_map = (
+                self._decision_map
+                + (px_evidence * self._cur_fov_frac)
+                + np.random.normal(0, self.params["ddm_sig"], self._decision_map.shape)
             )
-            # reset decision variables for all pixels
-            self._decision_map.fill(0)
-            # self._decision_map *= self.params["ddm_reset"]
-        else:
-            self._new_target = None
+
+            max_dv = np.max(self._decision_map)
+            if max_dv > self.params["ddm_thres"]:
+                # find the pixel that crossed the threshold ==> becomes the target
+                choice_idx = np.unravel_index(np.argmax(self._decision_map), self._decision_map.shape)
+                self._new_target = np.array([choice_idx[1], choice_idx[0]], dtype=int)
+
+                # fraction of dt after which the threshold would be crossed
+                dt_frac_sac = (max_dv - self.params["ddm_thres"]) / px_evidence[
+                    self._new_target[1], self._new_target[0]
+                ]
+                self._cur_waiting_time = np.clip(dt_frac_sac, 0, 1) * self._dt
+
+                # reset decision variables for all pixels
+                self._decision_map.fill(0)
+                # self._decision_map *= self.params["ddm_reset"]
+            else:
+                self._new_target = None
+
         if self.params["sglrun_return"]:
             self._all_dvs.append(self._decision_map)
 
@@ -225,10 +223,10 @@ class LocationModel(Model):
         TRYOUT: Saccade could be inaccurate, might lead to follow-up saccades.
         """
         assert self.params is not None, "Model parameters not loaded"
-        self._prev_loc = self._gaze_loc.copy()
+        self._prev_gaze_loc = self._gaze_loc.copy()  # for IOR 
         if self._new_target is not None:
             # if there is a new saccade target, set gaze location accurately to target
-            self._gaze_loc = self._new_target
+            self._gaze_loc = self._new_target.copy()
         else:
             # otherwise, we do fixational eye movements
             gaze_drift = np.array(
@@ -242,15 +240,15 @@ class LocationModel(Model):
             if self.params["use_flow"]:
                 gaze_drift += np.array(
                     self.video_data["flow_maps"][
-                        self._current_frame, self._gaze_loc[0], self._gaze_loc[1]
+                        self._current_frame, self._gaze_loc[1], self._gaze_loc[0]
                     ],
                     int,
                 )
-            self._gaze_loc += np.array([gaze_drift[1], gaze_drift[0]])
+            self._gaze_loc += np.array([gaze_drift[0], gaze_drift[1]])
 
         # make sure that gaze is always on video
-        self._gaze_loc[0] = max(min(self._gaze_loc[0], self.Dataset.VID_SIZE_Y - 1), 0)
-        self._gaze_loc[1] = max(min(self._gaze_loc[1], self.Dataset.VID_SIZE_X - 1), 0)
+        self._gaze_loc[0] = max(min(self._gaze_loc[0], self.Dataset.VID_SIZE_X - 1), 0)
+        self._gaze_loc[1] = max(min(self._gaze_loc[1], self.Dataset.VID_SIZE_Y - 1), 0)
 
     def write_sgl_output_gif(self, storagename, slowgif=False, dpi=100):
         """
@@ -307,8 +305,8 @@ class LocationModel(Model):
             axs[1, 2].set_title("(V) Gaze update")
             for ax in axs.flat:
                 ax.scatter(
-                    self.result_dict[vidname][runname]["gaze"][f][1],
                     self.result_dict[vidname][runname]["gaze"][f][0],
+                    self.result_dict[vidname][runname]["gaze"][f][1],
                     s=300,
                     c="green",
                     marker="x",
@@ -316,8 +314,8 @@ class LocationModel(Model):
                 )
                 ax.axis("off")
             axs[1, 2].scatter(
-                self.result_dict[vidname][runname]["gaze"][f + 1][1],
                 self.result_dict[vidname][runname]["gaze"][f + 1][0],
+                self.result_dict[vidname][runname]["gaze"][f + 1][1],
                 s=300,
                 facecolors="none",
                 edgecolors="r",
@@ -326,12 +324,12 @@ class LocationModel(Model):
                 alpha=0.75,
             )
             axs[1, 2].arrow(
-                self.result_dict[vidname][runname]["gaze"][f][1],
                 self.result_dict[vidname][runname]["gaze"][f][0],
-                self.result_dict[vidname][runname]["gaze"][f + 1][1]
-                - self.result_dict[vidname][runname]["gaze"][f][1],
+                self.result_dict[vidname][runname]["gaze"][f][1],
                 self.result_dict[vidname][runname]["gaze"][f + 1][0]
                 - self.result_dict[vidname][runname]["gaze"][f][0],
+                self.result_dict[vidname][runname]["gaze"][f + 1][1]
+                - self.result_dict[vidname][runname]["gaze"][f][1],
                 head_width=15,
                 head_length=15,
                 fc="k",

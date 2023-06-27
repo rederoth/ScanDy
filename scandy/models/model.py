@@ -38,7 +38,22 @@ class Model:
         self.params = params
 
         # video data will be loaded before running the model
-        self.video_data = None
+        # self.video_data = None
+
+        # Attributes that are updated when loading a video
+        self.video_data = {}
+        self._dt = 1000.0 / self.Dataset.FPS  # in ms, TODO for each video differently?
+        self._t = 0.0
+        # Attributes that are updated when running the model for a single video
+        self._scanpath = []
+        self._f_sac = []
+        self._gaze_loc = np.zeros(2, int)  # self.params["startpos"].copy()
+        self._new_target = None
+        self._prev_gaze_loc = np.zeros(2, int)  # self.params["startpos"].copy()
+        # new due to saccades taking up time
+        self._current_frame = 0
+        self._cur_waiting_time = 0.0
+        self._cur_fov_frac = 1.0
 
         # create output dictionary and result dataframe
         self.result_dict = {}
@@ -109,6 +124,18 @@ class Model:
         """Module (V), defined in each model."""
         pass
 
+    def calc_sac_dur(self, dist_dva):
+        """
+        Calculate the saccade duration.
+        TODO: Use lit vals or train vals of main sequence!
+        :param dist_dva: saccade amplitude
+        :type dist_dva: float
+        """
+        # sacdur = self.params["sacdur_slope"] * dist_dva + self.params["sacdur_intercept"]
+        sacdur = 10.0 * dist_dva + 0.0
+        # print("Saccade duration:", sacdur, "dist_dva:", dist_dva)
+        return sacdur
+
     def sgl_vid_run(self, videoname, force_reload=False):
         """
         Run the model on a single video, depending on the implementation of the
@@ -136,7 +163,7 @@ class Model:
             np.random.seed(self.params.rs)
 
         # reinit all variables
-        self.reinit_for_sgl_run()
+        self.reinit_for_sgl_run()  # TODO!
 
         # set initial gaze location
         self._gaze_loc = self.params["startpos"].copy()
@@ -144,25 +171,114 @@ class Model:
 
         # Loop through all frames and run all modules
         # no new location in prediction in last frame => len(scanpath)=nframes
+        self._t = 0.0
+        nfov = 0
+        dfov_list = []
+        fov_start_f = 0
+        fov_start_t = 0.0
+        ongoing_sacdur = 0.0
+        prev_sacdur = 0.0
+        prev_sacamp = np.nan
+        fov_start_loc = self._gaze_loc.copy()  # copy start position
+        
         for f in range(self.video_data["nframes"] - 1):
-
             self._current_frame = f
+
+            # do not accumulate evidence for the time the saccade was ongoing
+            self._cur_fov_frac = np.clip(
+                (self._cur_waiting_time + self._dt - ongoing_sacdur) / self._dt,
+                0.0,
+                1.0,
+            )
+            print(f"{f:03}  fov frac:", self._cur_fov_frac, "cur waiting time:", self._cur_waiting_time, "cur sacdur:", ongoing_sacdur)
+
+            # if saccade takes up the whole frame, do not update decision variables
+            if self._cur_fov_frac == 0.0:
+                self._cur_waiting_time += self._dt
+            else:
+                self._cur_waiting_time = 0
+                ongoing_sacdur = 0.0
+
             self.update_features()
             self.update_sensitivity()
             self.update_ior()
             self.update_decision()
             self.update_gaze()
 
+            # update time
+            self._t += self._dt
+
             # store when a saccade was made in list
             if self._new_target is not None:
-                self._f_sac.append(f)
+                fov_dur = self._t - fov_start_t - self._cur_waiting_time
+                # nfov, frame_start, frame_end, fov_dur, x_start, y_start, x_end, y_end, sac_dur
+                dfov_list.append(
+                    [
+                        nfov,
+                        fov_start_f,
+                        f,
+                        fov_dur,
+                        fov_start_loc[0],
+                        fov_start_loc[1],
+                        self._prev_gaze_loc[0],
+                        self._prev_gaze_loc[1],
+                        prev_sacamp,
+                        prev_sacdur,
+                    ]
+                )
+                fov_start_loc = self._gaze_loc.copy()
+                prev_sacamp = (
+                    np.linalg.norm(self._gaze_loc - self._prev_gaze_loc)
+                    * self.Dataset.PX_TO_DVA
+                )
+                ongoing_sacdur = self.calc_sac_dur(prev_sacamp)
+                prev_sacdur = ongoing_sacdur.copy()
+                fov_start_t = fov_start_t + fov_dur + prev_sacdur
+                fov_start_f = int(fov_start_t // self._dt)
 
-            # add updated gaze location to scanpath
+                self._f_sac.append(f)
+                nfov += 1
+                self._new_target = None
+
+            # add updated gaze location to scanpath in every frame
             self._scanpath.append(self._gaze_loc.copy())
 
+        # last foveation ends with end of video
+        dfov_list.append(
+            [
+                nfov,
+                fov_start_f,
+                self.video_data["nframes"] - 1,
+                self._t - fov_start_t - self._cur_waiting_time + self._dt,
+                fov_start_loc[0],
+                fov_start_loc[1],
+                self._gaze_loc[0],
+                self._gaze_loc[1],
+                prev_sacamp,
+                prev_sacdur,
+            ]
+        )
+
+        # create dataframe out of dfov_list
+        dfov = pd.DataFrame(
+            dfov_list,
+            columns=[
+                "nfov",
+                "frame_start",
+                "frame_end",
+                "duration_ms",
+                "x_start",
+                "y_start",
+                "x_end",
+                "y_end",
+                "sac_amp_dva",
+                "sac_dur",
+            ],
+        )
         res_dict = {
             "gaze": np.asarray(self._scanpath),
             "f_sac": np.asarray(self._f_sac),
+            "dfov": dfov,
         }
         return res_dict
 
@@ -319,7 +435,7 @@ class Model:
                 df["amp_dva"] = [np.nan] + list(
                     np.sqrt(diff[:, 0] ** 2 + diff[:, 1] ** 2) * self.Dataset.PX_TO_DVA
                 )
-                df_all = df_all.append(df)
+                df_all = pd.concat([df_all, df])
 
         all_durations = df_all["dur_ms"].dropna().values
         all_amplitudes = df_all["amp_dva"].dropna().values
@@ -357,8 +473,8 @@ class Model:
         objects_per_frame = [
             uf.object_at_position(
                 segmentation_masks[f],
-                run_dict["gaze"][f][1],
                 run_dict["gaze"][f][0],
+                run_dict["gaze"][f][1],
                 radius=self.Dataset.RADIUS_OBJ_GAZE,
             )
             for f in range(self.Dataset.video_frames[videoname])
@@ -383,10 +499,10 @@ class Model:
         df["duration_ms"] = (
             (1 + df["frame_end"] - df["frame_start"]) * 1000.0 / self.Dataset.FPS
         )
-        df["x_start"] = [run_dict["gaze"][f][1] for f in df["frame_start"]]
-        df["y_start"] = [run_dict["gaze"][f][0] for f in df["frame_start"]]
-        df["x_end"] = [run_dict["gaze"][f][1] for f in df["frame_end"]]
-        df["y_end"] = [run_dict["gaze"][f][0] for f in df["frame_end"]]
+        df["x_start"] = [run_dict["gaze"][f][0] for f in df["frame_start"]]
+        df["y_start"] = [run_dict["gaze"][f][1] for f in df["frame_start"]]
+        df["x_end"] = [run_dict["gaze"][f][0] for f in df["frame_end"]]
+        df["y_end"] = [run_dict["gaze"][f][1] for f in df["frame_end"]]
         # check most common object between start and end frame
         df["object"] = [
             Counter(
@@ -414,7 +530,7 @@ class Model:
                 np.sqrt(diff[:, 0] ** 2 + diff[:, 1] ** 2) * self.Dataset.PX_TO_DVA
             )
             df["sac_angle_h"] = [np.nan] + list(
-                np.arctan2(diff[:, 0], diff[:, 1]) / np.pi * 180
+                np.arctan2(diff[:, 1], diff[:, 0]) / np.pi * 180
             )
             # second entry of angle_p will also be nan since first angle_h is nan
             df["sac_angle_p"] = [np.nan] + [
@@ -479,7 +595,9 @@ class Model:
             segmentation_masks = self.Dataset.load_objectmasks(videoname)
             for runname in self.result_dict[videoname]:
                 df_trial = self.evaluate_trial(videoname, runname, segmentation_masks)
-                self.result_df = self.result_df.append(df_trial, ignore_index=True)
+                self.result_df = pd.concat(
+                    [self.result_df, df_trial], ignore_index=True
+                )
 
         return self.result_df
 
@@ -567,7 +685,7 @@ class Model:
             for runname in self.result_dict[videoname]:
                 run_dict = self.result_dict[videoname][runname]
                 nss_frames = [
-                    gt_fovmaps[f, run_dict["gaze"][f][0], run_dict["gaze"][f][0]]
+                    gt_fovmaps[f, run_dict["gaze"][f][1], run_dict["gaze"][f][0]]
                     for f in range(nframes)
                 ]
                 vid_nss_scores.append(np.mean(nss_frames))
@@ -605,15 +723,15 @@ class Model:
             ax.imshow(vidlist[f])
             for key in res_dict.keys():
                 ax.scatter(
-                    res_dict[key]["gaze"][f][1],
                     res_dict[key]["gaze"][f][0],
+                    res_dict[key]["gaze"][f][1],
                     s=150,
                     alpha=0.8,
                 )
                 if f > 0:
                     ax.plot(
-                        [res_dict[key]["gaze"][f - 1][1], res_dict[key]["gaze"][f][1]],
                         [res_dict[key]["gaze"][f - 1][0], res_dict[key]["gaze"][f][0]],
+                        [res_dict[key]["gaze"][f - 1][1], res_dict[key]["gaze"][f][1]],
                         linewidth=7,
                         ls=":",
                     )
