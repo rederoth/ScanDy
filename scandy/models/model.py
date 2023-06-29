@@ -126,13 +126,13 @@ class Model:
 
     def calc_sac_dur(self, dist_dva):
         """
-        Calculate the saccade duration.
-        TODO: Use lit vals or train vals of main sequence!
+        Calculate the saccade duration. We use literature values from
+        Collewijn, H., Erkelens, C. J., & Steinman, R. M. (1988). Binocular co-ordination of human horizontal saccadic eye movements.
         :param dist_dva: saccade amplitude
         :type dist_dva: float
         """
         # sacdur = self.params["sacdur_slope"] * dist_dva + self.params["sacdur_intercept"]
-        sacdur = 10.0 * dist_dva + 0.0
+        sacdur = 2.7 * dist_dva + 23.0
         # print("Saccade duration:", sacdur, "dist_dva:", dist_dva)
         return sacdur
 
@@ -180,7 +180,7 @@ class Model:
         prev_sacdur = 0.0
         prev_sacamp = np.nan
         fov_start_loc = self._gaze_loc.copy()  # copy start position
-        
+
         for f in range(self.video_data["nframes"] - 1):
             self._current_frame = f
 
@@ -190,7 +190,6 @@ class Model:
                 0.0,
                 1.0,
             )
-            print(f"{f:03}  fov frac:", self._cur_fov_frac, "cur waiting time:", self._cur_waiting_time, "cur sacdur:", ongoing_sacdur)
 
             # if saccade takes up the whole frame, do not update decision variables
             if self._cur_fov_frac == 0.0:
@@ -397,51 +396,6 @@ class Model:
             )
         return videos
 
-    def evaluate_all_dur_amp(self):
-        """
-        It makes sense to use this instead of `evaluate_all_to_df`, if only the
-        foveation durations and saccade amplitudes of the result are of interest.
-
-        :return: All durations and amplitudes of the model's results
-        :rtype: _type_
-        """
-        df_all = pd.DataFrame()
-        for videoname in self.result_dict:
-            for runname in self.result_dict[videoname]:
-                run_dict = self.result_dict[videoname][runname]
-                # if no saccades are made, diff will be empty and lead to an index error!
-                if run_dict["f_sac"].size == 0:
-                    # df = pd.DataFrame(columns=['dur_ms', 'amp_dva']) --> empty return will lead to error later!
-                    fov_ends = np.array([0, self.Dataset.video_frames[videoname] - 1])
-                else:
-                    fov_ends = np.append(
-                        run_dict["f_sac"], self.Dataset.video_frames[videoname] - 1
-                    )
-
-                df = pd.DataFrame()
-                df["frame_start"] = [0] + [f + 1 for f in fov_ends[:-1]]
-                df["frame_end"] = fov_ends
-                df["dur_ms"] = (
-                    (1 + df["frame_end"] - df["frame_start"])
-                    * 1000.0
-                    / self.Dataset.FPS
-                )
-                diff = np.array(
-                    [
-                        run_dict["gaze"][f + 1] - run_dict["gaze"][f]
-                        for f in df["frame_end"][:-1]
-                    ]
-                )
-                df["amp_dva"] = [np.nan] + list(
-                    np.sqrt(diff[:, 0] ** 2 + diff[:, 1] ** 2) * self.Dataset.PX_TO_DVA
-                )
-                df_all = pd.concat([df_all, df])
-
-        all_durations = df_all["dur_ms"].dropna().values
-        all_amplitudes = df_all["amp_dva"].dropna().values
-
-        return all_durations, all_amplitudes
-
     def evaluate_trial(self, videoname, runname, segmentation_masks=None):
         """
         Evaluation function that returns a dataframe with all relevant foveation
@@ -457,58 +411,40 @@ class Model:
         :return: Dataframe with all relevant foveation and saccade statistics of this trial
         :rtype: pd.DataFrame
         """
+
         assert (
             self.result_dict
         ), "`result_dict` is empty. You need to run the model before evaluating the results."
         run_dict = self.result_dict[videoname][runname]
-        assert {"gaze", "f_sac"} <= set(
+        assert {"gaze", "f_sac", "dfov"} <= set(
             run_dict
-        ), "Integration method did not provide `gaze` and `f_sac`"
-
+        ), "Integration method did not provide `gaze`, `f_sac`, and `dfov`."
         # option to pass masks so they dont have to be loaded each time in the loop
         if segmentation_masks is None:
             segmentation_masks = self.Dataset.load_objectmasks(videoname)
-        # get all foveated objects - we allow for a tolerance of 1 dva for an
-        # object to be considered foveated (as for the human eye tracking data)
-        objects_per_frame = [
-            uf.object_at_position(
-                segmentation_masks[f],
-                run_dict["gaze"][f][0],
-                run_dict["gaze"][f][1],
-                radius=self.Dataset.RADIUS_OBJ_GAZE,
-            )
-            for f in range(self.Dataset.video_frames[videoname])
-        ]
-        # list of when saccades have been made, i.e when foveations end
-        # no saccade in last frame possible, since loop runs only in range(frames-1)
-        fov_ends = np.append(
-            run_dict["f_sac"], self.Dataset.video_frames[videoname] - 1
-        ).astype(int)
-        N_fov = len(fov_ends)
-        # dataframe has a row for each foveation
-        df = pd.DataFrame()
-        # nfov allows to ignore_index=True without losing individual indexing per run
-        df["nfov"] = [int(i) for i in range(N_fov)]
+
+        # add additional evaluations to the existing foveation dataframe ()
+        df = self.result_dict[videoname][runname]["dfov"]
+        N_fov = len(df)
         # columns where the value is the same for all foveations in this run
-        df["video"] = videoname
-        df["subject"] = runname
-        # get the start and end frame for each foveation
-        df["frame_start"] = [0] + [f + 1 for f in fov_ends[:-1]]
-        df["frame_end"] = fov_ends
-        # add a `1+` such that even a single frame fov has a duration --> sums to duration!
-        df["duration_ms"] = (
-            (1 + df["frame_end"] - df["frame_start"]) * 1000.0 / self.Dataset.FPS
-        )
-        df["x_start"] = [run_dict["gaze"][f][0] for f in df["frame_start"]]
-        df["y_start"] = [run_dict["gaze"][f][1] for f in df["frame_start"]]
-        df["x_end"] = [run_dict["gaze"][f][0] for f in df["frame_end"]]
-        df["y_end"] = [run_dict["gaze"][f][1] for f in df["frame_end"]]
+        df.insert(1, "video", videoname)
+        df.insert(2, "subject", runname)
         # check most common object between start and end frame
         df["object"] = [
             Counter(
                 ", ".join(
-                    objects_per_frame[
-                        df["frame_start"].iloc[n] : df["frame_end"].iloc[n] + 1
+                    [
+                        # get all foveated objects in this foveation
+                        # with tolerance of 1 dva (as for the human eye tracking data)
+                        uf.object_at_position(
+                            segmentation_masks[f],
+                            run_dict["gaze"][f][0],
+                            run_dict["gaze"][f][1],
+                            radius=self.Dataset.RADIUS_OBJ_GAZE,
+                        )
+                        for f in range(
+                            df["frame_start"].iloc[n], df["frame_end"].iloc[n] + 1
+                        )
                     ]
                 ).split(", ")
             ).most_common(1)[0][0]
@@ -526,9 +462,9 @@ class Model:
         # aviod error if no saccades are made
         if diff.size:
             # first foveation is excluded since no saccade preceedes it!
-            df["sac_amp_dva"] = [np.nan] + list(
-                np.sqrt(diff[:, 0] ** 2 + diff[:, 1] ** 2) * self.Dataset.PX_TO_DVA
-            )
+            # df["sac_amp_eval"] = [np.nan] + list(
+            #     np.sqrt(diff[:, 0] ** 2 + diff[:, 1] ** 2) * self.Dataset.PX_TO_DVA
+            # )
             df["sac_angle_h"] = [np.nan] + list(
                 np.arctan2(diff[:, 1], diff[:, 0]) / np.pi * 180
             )
@@ -538,9 +474,13 @@ class Model:
                 for i in range(N_fov - 1)
             ]
         else:
-            df["sac_amp_dva"] = [np.nan]
+            df["sac_amp_eval"] = [np.nan]
             df["sac_angle_h"] = [np.nan]
             df["sac_angle_p"] = [np.nan]
+
+        # add start and end time of each foveation
+        df["fov_end"] = (df["duration_ms"] + df["sac_dur"]).cumsum()
+        df["fov_start"] = df["fov_end"] - df["duration_ms"]
 
         # calculate the foveation categories (Background, Detection, Inspection, Revisit)
         fov_categories = []
@@ -557,18 +497,17 @@ class Model:
                     fov_categories.append("D")
                 else:
                     fov_categories.append("R")
-                    return_frame = df["frame_end"][
+                    return_prev_t = df["fov_end"][
                         prev_obj.where(prev_obj == obj).last_valid_index()
                     ]
                     # store time difference [in milliseconds] in array!
                     ret_times[n] = (
-                        (df["frame_start"].iloc[n] - return_frame)
-                        * 1000
-                        / self.Dataset.FPS
+                        (df["fov_start"].iloc[n] - return_prev_t)
                     )
         df["fov_category"] = fov_categories
         df["ret_times"] = ret_times
-        # return the dataframe
+
+        # return the dataframes
         return df
 
     def evaluate_all_to_df(self, overwrite_old=False):
@@ -600,10 +539,61 @@ class Model:
                 )
 
         return self.result_df
+    
+    def evaluate_all_obj(self, overwrite_old=False):
+        """
+        DIR evaluation based on individual objects
+
+        :param overwrite_old: Should not be repeated if its already been evaluated, defaults to False
+        :type overwrite_old: bool, optional
+        :return: Result dataframe of the model run
+        :rtype: pd.DataFrame       
+        """        
+        assert (
+            self.result_df.empty == False
+        ), "`result_df` is empty. You need to evaluate the foveations before the objects."
+        # if len(self.result_obj.index) > 0:
+        #     assert (
+        #         overwrite_old
+        #     ), "`result_df` is already filled, pass `overwrite_old=True` if you want to overwrite it"
+        obj_list = []
+        df = self.result_df
+        for videoname in df["video"].unique():
+            df_vid = df[df["video"] == videoname]
+            # segmentation_masks = self.Dataset.load_objectmasks(videoname)
+            for sub in df_vid["subject"].unique():
+                df_trial = df_vid[df_vid["subject"] == sub]
+        
+                for obj_id in df_trial["object"].unique():
+                    # dobj[f"Object {obj_id}"] = {}
+                    # get all foveations where this object was foveated
+                    dtemp = df_trial[df_trial["object"] == obj_id]
+                    # add the overall time this object was foveated for each category
+                    d_cat = {}
+                    for fov_cat in ["D", "I", "R"]:
+                        d_cat[fov_cat] = np.sum(
+                            dtemp["duration_ms"][dtemp["fov_category"] == fov_cat]
+                        )
+
+                    obj_list.append(
+                        {
+                            "video": videoname,
+                            "subject": sub,
+                            "object": obj_id,
+                            "D": d_cat["D"],
+                            "I": d_cat["I"],
+                            "R": d_cat["R"],
+                        }
+                    )
+        # convert to dataframe
+        dfobj = pd.DataFrame(obj_list)
+        return dfobj
+
+
 
     def get_fovcat_ratio(self, videos_to_eval="all"):
         """
-                Convenience function that returns the ratios as dictionary for the different categories.
+        Convenience function that returns the ratios as dictionary for the different categories.
 
         :param videos_to_eval: Keyword for videos, defaults to "all"
         :type videos_to_eval: str, optional
