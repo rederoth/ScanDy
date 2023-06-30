@@ -395,6 +395,28 @@ class Model:
                 f"The given `videos_to_eval` is not valid, must be a videoname in Dataset, `test`, `train`, or `all`."
             )
         return videos
+    
+    def get_all_dur_amp(self):
+        """
+        Get the duration and amplitude of all saccades in all trials.
+        
+        :return: All durations and amplitudes of the model's results
+        :rtype: np.array, np.array
+        """
+        # initialize empty np.arrays for durations and amplitudes
+        durations = []
+        amplitudes = []
+
+        for vid in self.result_dict:
+            for run in self.result_dict[vid]:
+                durations.extend(self.result_dict[vid][run]["dfov"]["duration_ms"].dropna().values)
+                amplitudes.extend(self.result_dict[vid][run]["dfov"]["sac_amp_dva"].dropna().values)
+        
+        if len(amplitudes) == 0:
+            logging.warning("No saccades in model results.")
+            amplitudes.append(0)
+        
+        return np.array(durations), np.array(amplitudes)
 
     def evaluate_trial(self, videoname, runname, segmentation_masks=None):
         """
@@ -540,7 +562,7 @@ class Model:
 
         return self.result_df
     
-    def evaluate_all_obj(self, overwrite_old=False):
+    def evaluate_all_obj(self):
         """
         DIR evaluation based on individual objects
 
