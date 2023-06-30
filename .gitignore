@@ -9,7 +9,7 @@ ScanDy_results/
 # examples/
 # scandy/models/ObjectModel/
 test_hpc.ipynb
-interactive_model_visu_private.ipynb
+*_private.ipynb
 *.zip
 *.sh
 
