@@ -1,3 +1,8 @@
+# import os
+# if os.getcwd().split("/")[-1] == "scripts":
+#     os.chdir('..')
+# print(os.getcwd())
+
 import time
 import numpy as np
 import pandas as pd
@@ -70,7 +75,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--Npop", default=32, type=int, help="population size for each generation"
     )
-    parser.add_argument("--Ngen", default=30, type=int, help="number of generations")
+    parser.add_argument("--Ngen", default=50, type=int, help="number of generations")
     parser.add_argument(
         "--featureset", default="molin", type=str, help="molin, TASEDnet, or None"
     )
@@ -210,12 +215,12 @@ if __name__ == "__main__":
     if MODEL == "obj":
         pars = ParameterSpace(
             ["ddm_thres", "ddm_sig", "att_dva", "ior_decay", "ior_inobj"],
-            [[1.0, 3.0], [0.05, 0.25], [5, 20], [30, 300], [0.4, 1.0]],
+            [[1.5, 3.5], [0.05, 0.25], [5, 20], [30, 300], [0.4, 1.0]],
         )
     else:
         pars = ParameterSpace(
             ["ddm_thres", "ddm_sig", "att_dva", "ior_decay", "ior_dva"],
-            [[0.2, 2], [0.01, 0.1], [3, 15], [30, 300], [0.5, 10]],
+            [[1.0, 3.0], [0.005, 0.05], [3, 15], [30, 300], [0.5, 10]],
         )
 
     if fitnessFovCat:

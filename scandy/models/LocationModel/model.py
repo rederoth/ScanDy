@@ -186,17 +186,17 @@ class LocationModel(Model):
 
         if self._cur_fov_frac > 0.0:
             # update decision variables
-            px_evidence = self._sens_map * self._feature_map * (1 - self._ior_map)
-            self._decision_map = (
-                self._decision_map
-                + (px_evidence * self._cur_fov_frac)
-                + np.random.normal(0, self.params["ddm_sig"], self._decision_map.shape)
-            )
+            px_evidence = self._sens_map * self._feature_map * (
+                1 - self._ior_map
+            ) + np.random.normal(0, self.params["ddm_sig"], self._decision_map.shape)
+            self._decision_map = self._decision_map + (px_evidence * self._cur_fov_frac)
 
             max_dv = np.max(self._decision_map)
             if max_dv > self.params["ddm_thres"]:
                 # find the pixel that crossed the threshold ==> becomes the target
-                choice_idx = np.unravel_index(np.argmax(self._decision_map), self._decision_map.shape)
+                choice_idx = np.unravel_index(
+                    np.argmax(self._decision_map), self._decision_map.shape
+                )
                 self._new_target = np.array([choice_idx[1], choice_idx[0]], dtype=int)
 
                 # fraction of dt after which the threshold would be crossed
@@ -223,7 +223,7 @@ class LocationModel(Model):
         TRYOUT: Saccade could be inaccurate, might lead to follow-up saccades.
         """
         assert self.params is not None, "Model parameters not loaded"
-        self._prev_gaze_loc = self._gaze_loc.copy()  # for IOR 
+        self._prev_gaze_loc = self._gaze_loc.copy()  # for IOR
         if self._new_target is not None:
             # if there is a new saccade target, set gaze location accurately to target
             self._gaze_loc = self._new_target.copy()
