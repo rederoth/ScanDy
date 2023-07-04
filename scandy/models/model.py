@@ -133,7 +133,6 @@ class Model:
         """
         # sacdur = self.params["sacdur_slope"] * dist_dva + self.params["sacdur_intercept"]
         sacdur = 2.7 * dist_dva + 23.0
-        # print("Saccade duration:", sacdur, "dist_dva:", dist_dva)
         return sacdur
 
     def sgl_vid_run(self, videoname, force_reload=False):
@@ -237,7 +236,6 @@ class Model:
 
                 self._f_sac.append(f)
                 nfov += 1
-                self._new_target = None
 
             # add updated gaze location to scanpath in every frame
             self._scanpath.append(self._gaze_loc.copy())
