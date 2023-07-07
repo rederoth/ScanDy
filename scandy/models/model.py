@@ -242,20 +242,21 @@ class Model:
             self._scanpath.append(self._gaze_loc.copy())
 
         # last foveation ends with end of video
-        dfov_list.append(
-            [
-                nfov,
-                fov_start_f,
-                self.video_data["nframes"] - 1,
-                self._t - fov_start_t + self._dt,
-                fov_start_loc[0],
-                fov_start_loc[1],
-                self._gaze_loc[0],
-                self._gaze_loc[1],
-                prev_sacamp,
-                prev_sacdur,
-            ]
-        )
+        if fov_start_f < self.video_data["nframes"]:
+            dfov_list.append(
+                [
+                    nfov,
+                    fov_start_f,
+                    self.video_data["nframes"] - 1,
+                    self._t - fov_start_t + self._dt,
+                    fov_start_loc[0],
+                    fov_start_loc[1],
+                    self._gaze_loc[0],
+                    self._gaze_loc[1],
+                    prev_sacamp,
+                    prev_sacdur,
+                ]
+            )
 
         # create dataframe out of dfov_list
         dfov = pd.DataFrame(
