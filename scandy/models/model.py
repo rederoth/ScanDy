@@ -209,6 +209,7 @@ class Model:
             # store when a saccade was made in list
             if self._new_target is not None:
                 fov_dur = self._t - fov_start_t - self._cur_waiting_time
+                # print(f"DEBUG: frame: {f}, time {self._t}, target {self._new_target}, fov_start_t {fov_start_t}, waiting time: {self._cur_waiting_time}, ongoing sacdur: {ongoing_sacdur}, cur fov frac: {self._cur_fov_frac}, fov_dur: {fov_dur}")
                 # nfov, frame_start, frame_end, fov_dur, x_start, y_start, x_end, y_end, sac_dur
                 dfov_list.append(
                     [
@@ -246,7 +247,7 @@ class Model:
                 nfov,
                 fov_start_f,
                 self.video_data["nframes"] - 1,
-                self._t - fov_start_t - self._cur_waiting_time + self._dt,
+                self._t - fov_start_t + self._dt,
                 fov_start_loc[0],
                 fov_start_loc[1],
                 self._gaze_loc[0],

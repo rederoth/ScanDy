@@ -21,7 +21,6 @@ import scandy.utils.functions as uf
 
 
 if __name__ == "__main__":
-
     starttime = time.time()
 
     # load VidCom dataset
@@ -63,12 +62,12 @@ if __name__ == "__main__":
     }
     VidCom = Dataset(datadict)
 
-    runid = "loc_train_molin_64-32-50_2023-03-09-01H-04M-33S_22332349"
+    runid = "loc_train_molin_64-32-50_2023-07-04-12H-53M-53S_22600094"
 
-    # obj_train_molin_64-32-50_2023-03-09-01H-04M-58S_22332350
-    # obj_train_None_64-32-50_2023-03-09-01H-05M-43S_22332351
-    # loc_train_molin_64-32-50_2023-03-09-01H-04M-33S_22332349
-    # loc_train_TASEDnet_64-32-50_2023-03-09-01H-02M-20S_22332348
+    # obj_train_None_64-32-50_2023-07-03-12H-12M-19S_22595971
+    # obj_train_molin_64-32-50_2023-07-03-12H-12M-19S_22595970
+    # loc_train_molin_64-32-50_2023-07-04-12H-53M-53S_22600094
+    # loc_train_TASEDnet_64-32-50_2023-07-04-12H-53M-53S_22600095
 
     DILLNAME = f"{runid}.dill"
     evol = Evolution(lambda x: x, ParameterSpace(["mock"], [[0, 1]]))
@@ -103,9 +102,11 @@ if __name__ == "__main__":
                 par
             ]
 
-        if os.path.isfile(f"results/{runid}/testres_df_top{i}.csv") == False:
-            model.run("test", seeds=[s for s in range(1, 13)], overwrite_old=True)
+        if os.path.isfile(f"results/{runid}/res_df_top{i}.csv.gz") == False:
+            model.run("all", seeds=[s for s in range(1, 13)], overwrite_old=True)
             model.evaluate_all_to_df()
             res_ratio = model.get_fovcat_ratio()
             # logging.info("GT" VidCom.get_fovcat_ratio(), "\nSIM", res_ratio)
-            model.result_df.to_csv(f"results/{runid}/testres_df_top{i}.csv")
+            model.result_df.to_csv(
+                f"results/{runid}/res_df_top{i}.csv.gz", compression="gzip", index=False
+            )

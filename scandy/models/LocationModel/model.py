@@ -210,6 +210,8 @@ class LocationModel(Model):
                 # self._decision_map *= self.params["ddm_reset"]
             else:
                 self._new_target = None
+        else:
+            self._new_target = None
 
         if self.params["sglrun_return"]:
             self._all_dvs.append(self._decision_map)
