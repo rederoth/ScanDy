@@ -20,6 +20,7 @@ from neurolib.optimize.evolution import Evolution
 
 from scandy.models.ObjectModel import ObjectModel
 from scandy.models.LocationModel import LocationModel
+from scandy.models.MixedModel import MixedModel
 from scandy.utils.dataclass import Dataset
 
 
@@ -86,7 +87,7 @@ if __name__ == "__main__":
         "--model",
         default="obj",
         type=str,
-        help="obj or loc, will initiallize respective model subclass",
+        help="obj or loc or mix, will initiallize respective model subclass",
     )
     parser.add_argument(
         "--videos",
@@ -145,8 +146,10 @@ if __name__ == "__main__":
             model = ObjectModel(VidCom)
         elif MODEL == "loc":
             model = LocationModel(VidCom)
+        elif MODEL == "mix":
+            model = MixedModel(VidCom)
         else:
-            raise Exception(f"The only implemented models so far are obj and loc!")
+            raise Exception(f"The only implemented models so far are obj, loc & mix!")
         model.params["centerbias"] = "anisotropic_default"
         model.params["featuretype"] = FEATURESET
         # free model parameters, varied in evolution
@@ -215,12 +218,20 @@ if __name__ == "__main__":
     if MODEL == "obj":
         pars = ParameterSpace(
             ["ddm_thres", "ddm_sig", "att_dva", "ior_decay", "ior_inobj"],
-            [[1.5, 3.5], [0.05, 0.25], [5, 20], [30, 300], [0.4, 1.0]],
+            # [[1.5, 3.5], [0.05, 0.25], [5, 20], [30, 300], [0.4, 1.0]],
+            [[1.0, 3.0], [0.05, 0.25], [5, 20], [30, 300], [0.4, 1.0]], # preprint
         )
+    elif MODEL == "mix":
+        pars = ParameterSpace(
+            ["ddm_thres", "ddm_sig", "att_dva", "ior_decay", "ior_dva"],
+            [[1.0, 3.0], [0.05, 0.25], [5, 20], [30, 300], [0.5, 10]], 
+        )
+
     else:
         pars = ParameterSpace(
             ["ddm_thres", "ddm_sig", "att_dva", "ior_decay", "ior_dva"],
-            [[1.0, 3.0], [0.005, 0.05], [3, 15], [30, 300], [0.5, 10]],
+            # [[1.0, 2.5], [0.005, 0.05], [3, 15], [30, 300], [0.5, 10]],
+            [[0.2, 2], [0.01, 0.1], [3, 15], [30, 300], [0.5, 10]], # preprint
         )
 
     if fitnessFovCat:

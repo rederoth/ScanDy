@@ -16,6 +16,7 @@ from neurolib.optimize.evolution import Evolution
 
 from scandy.models.ObjectModel import ObjectModel
 from scandy.models.LocationModel import LocationModel
+from scandy.models.MixedModel import MixedModel
 from scandy.utils.dataclass import Dataset
 import scandy.utils.functions as uf
 
@@ -62,12 +63,17 @@ if __name__ == "__main__":
     }
     VidCom = Dataset(datadict)
 
-    runid = "loc_train_molin_64-32-50_2023-07-04-12H-53M-53S_22600094"
+    runid = "loc_train_TASEDnet_64-32-50_2023-07-07-16H-57M-25S_22615289"
 
-    # obj_train_None_64-32-50_2023-07-03-12H-12M-19S_22595971
-    # obj_train_molin_64-32-50_2023-07-03-12H-12M-19S_22595970
-    # loc_train_molin_64-32-50_2023-07-04-12H-53M-53S_22600094
-    # loc_train_TASEDnet_64-32-50_2023-07-04-12H-53M-53S_22600095
+    # loc_train_molin_64-32-50_2023-07-07-15H-29M-52S_22615238
+    # loc_train_TASEDnet_64-32-50_2023-07-07-15H-30M-01S_22615239
+    # obj_train_molin_64-32-50_2023-07-07-15H-29M-46S_22615237
+    # obj_train_None_64-32-50_2023-07-07-15H-29M-46S_22615236
+
+    # loc_train_molin_64-32-50_2023-07-07-16H-57M-25S_22615291
+    # loc_train_TASEDnet_64-32-50_2023-07-07-16H-57M-25S_22615289
+    # obj_train_molin_64-32-50_2023-07-07-16H-57M-25S_22615292
+    # obj_train_None_64-32-50_2023-07-07-16H-57M-25S_22615293
 
     DILLNAME = f"{runid}.dill"
     evol = Evolution(lambda x: x, ParameterSpace(["mock"], [[0, 1]]))
@@ -80,6 +86,9 @@ if __name__ == "__main__":
         parameters = ["ddm_thres", "ddm_sig", "att_dva", "ior_decay", "ior_inobj"]
     elif "loc_" in runid:
         model = LocationModel(VidCom)
+        parameters = ["ddm_thres", "ddm_sig", "att_dva", "ior_decay", "ior_dva"]
+    elif "mix" in runid:
+        model = MixedModel(VidCom)
         parameters = ["ddm_thres", "ddm_sig", "att_dva", "ior_decay", "ior_dva"]
     else:
         raise NotImplementedError("Only Object- and Location-based are implemented")
