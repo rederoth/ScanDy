@@ -176,7 +176,6 @@ class MixedModel(Model):
                 self.Dataset.VID_SIZE_Y,
                 self.params["ior_dva"] * self.Dataset.DVA_TO_PX,
             )
-            # TRYOUT: instead of fully inhibiting, scale with self.params["ior_magnitude"]
             self._ior_map = np.clip(self._ior_map + inhibition, 0, 1)
         # in every timestep, decrease the inhibition linearly with dI = - r dt
         self._ior_map = np.clip(self._ior_map - 1.0 / self.params["ior_decay"], 0, 1)

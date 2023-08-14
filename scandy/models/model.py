@@ -561,7 +561,40 @@ class Model:
                 )
 
         return self.result_df
-    
+
+    def evaluate_all_to_baseline_df(self, overwrite_old=False):
+        """
+        Same as `evaluate_all_to_df` but with the objects scrambled / relocated.
+
+        :param overwrite_old: Should not be repeated if its already been evaluated, defaults to False
+        :type overwrite_old: bool, optional
+        :return: Result dataframe of the model run
+        :rtype: pd.DataFrame
+        """
+        assert (
+            self.result_dict
+        ), "`result_dict` is empty. You need to run the model before evaluating the results."
+        if len(self.result_df.index) > 0:
+            assert (
+                overwrite_old
+            ), "`result_df` is already filled, pass `overwrite_old=True` if you want to overwrite it"
+            self.result_df = pd.DataFrame()
+        for videoname in self.result_dict:
+            # load masks outside of loop to be a bit more efficient
+            segmentation_masks = self.Dataset.load_objectmasks(videoname)
+            # mirror all masks vertically and horizontally before reversing time
+            segmentation_masks = [np.flipud(m) for m in segmentation_masks]
+            segmentation_masks = [np.fliplr(m) for m in segmentation_masks]
+            segmentation_masks = segmentation_masks[::-1]
+            for runname in self.result_dict[videoname]:
+                df_trial = self.evaluate_trial(videoname, runname, segmentation_masks)
+                self.result_df = pd.concat(
+                    [self.result_df, df_trial], ignore_index=True
+                )
+        return self.result_df
+
+
+
     def evaluate_all_obj(self):
         """
         DIR evaluation based on individual objects
@@ -574,21 +607,17 @@ class Model:
         assert (
             self.result_df.empty == False
         ), "`result_df` is empty. You need to evaluate the foveations before the objects."
-        # if len(self.result_obj.index) > 0:
-        #     assert (
-        #         overwrite_old
-        #     ), "`result_df` is already filled, pass `overwrite_old=True` if you want to overwrite it"
-        obj_list = []
         df = self.result_df
-        for videoname in df["video"].unique():
+
+        vid_sub_obj_list = []
+        for videoname in df.video.unique():
             df_vid = df[df["video"] == videoname]
-            # segmentation_masks = self.Dataset.load_objectmasks(videoname)
             for sub in df_vid["subject"].unique():
                 df_trial = df_vid[df_vid["subject"] == sub]
-        
                 for obj_id in df_trial["object"].unique():
-                    # dobj[f"Object {obj_id}"] = {}
-                    # get all foveations where this object was foveated
+                    if obj_id in ["Ground", ""]:
+                        continue
+                    # get all rows where this object was foveated
                     dtemp = df_trial[df_trial["object"] == obj_id]
                     # add the overall time this object was foveated for each category
                     d_cat = {}
@@ -596,20 +625,64 @@ class Model:
                         d_cat[fov_cat] = np.sum(
                             dtemp["duration_ms"][dtemp["fov_category"] == fov_cat]
                         )
-
-                    obj_list.append(
+                    vid_sub_obj_list.append(
                         {
                             "video": videoname,
                             "subject": sub,
-                            "object": obj_id,
+                            "object": str(obj_id),
                             "D": d_cat["D"],
                             "I": d_cat["I"],
                             "R": d_cat["R"],
                         }
                     )
-        # convert to dataframe
-        dfobj = pd.DataFrame(obj_list)
-        return dfobj
+        df_vso = pd.DataFrame(vid_sub_obj_list)
+        # this gives us object statistics for each trial, based on this we now
+        # calculate the average time spent and the ratio of subs for each category
+        obj_list = []
+        for video in df_vso.video.unique():
+            df_vid = df_vso[df_vso["video"] == video]
+            nsubj = len(df_vid.subject.unique())
+            # go through all objects and calculate the average total time and ratios
+            for obj in sorted(df_vid.object.unique()):
+                df_obj = df_vid[df_vid["object"] == obj]
+                d_r = len(df_obj) / nsubj
+                i_r = len(df_obj[df_obj["I"] > 0]) / nsubj
+                r_r = len(df_obj[df_obj["R"] > 0]) / nsubj
+                d_t = df_obj["D"].sum() / nsubj
+                i_t = df_obj["I"].sum() / nsubj
+                r_t = df_obj["R"].sum() / nsubj
+                tot_t = d_t + i_t + r_t
+                obj_list.append(
+                    {
+                        "video": video,
+                        "object": obj,
+                        "D_r": d_r,
+                        "I_r": i_r,
+                        "R_r": r_r,
+                        "D_t": d_t,
+                        "I_t": i_t,
+                        "R_t": r_t,
+                        "tot_t": tot_t,
+                    }
+                )
+        return pd.DataFrame(obj_list)
+
+    def get_foveation_ratio(self, videos_to_eval="all"):
+        """
+        Convenience function that returns the ratio of overall foveations compared to the total stimulus time.
+        :param videos_to_eval: Keyword for videos, defaults to "all"
+        :type videos_to_eval: str, optional
+        :return: Overall ratio of foveation
+        :rtype: float
+        """ 
+        videos = self.select_videos(videos_to_eval)
+        eval_df = self.result_df[self.result_df["video"].isin(videos)]
+        assert (
+            len(eval_df) > 0
+        ), f"`result_df` is empty for {videos_to_eval}, make sure to run `evaluate_all_to_df` first!"
+        fov_dur = np.sum(eval_df.duration_ms)
+        sac_dur = np.sum(eval_df.sac_dur)
+        return fov_dur / (fov_dur + sac_dur)
 
 
 
@@ -624,7 +697,6 @@ class Model:
         """
         videos = self.select_videos(videos_to_eval)
         eval_df = self.result_df[self.result_df["video"].isin(videos)]
-
         assert (
             len(eval_df) > 0
         ), f"`result_df` is empty for {videos_to_eval}, make sure to run `evaluate_all_to_df` first!"
@@ -637,47 +709,6 @@ class Model:
             )
             ratios[cat] = ratio
         return ratios
-
-    def functional_event_courses(self, videos_to_eval="all"):
-        # for simulated data, the dimension is (#videos*#seeds, #frames)
-        videos = self.select_videos(videos_to_eval)
-        eval_df = self.result_df[self.result_df["video"].isin(videos)]
-        n_scanpaths = len(videos) * len(set(eval_df.subject))
-        eventcourse = np.chararray((n_scanpaths, self.Dataset.FRAMES_ALL_VIDS + 1))
-
-        subcount = 0
-        for vid in sorted(videos):
-            seeds = sorted(set(eval_df[eval_df["video"] == vid].subject))
-            for run in seeds:
-                temp = eval_df[(eval_df["video"] == vid) & (eval_df["subject"] == run)]
-                for index in temp.index:
-                    f_start = temp.loc[index].frame_start
-                    f_end = temp.loc[index].frame_end
-                    # always add 1 to f_end to include the ending frame
-                    eventcourse[subcount, f_start : f_end + 1] = temp.loc[
-                        index
-                    ].fov_category
-                subcount += 1
-
-        ground_f = np.zeros(self.Dataset.FRAMES_ALL_VIDS)
-        inspection_f = np.zeros(self.Dataset.FRAMES_ALL_VIDS)
-        detection_f = np.zeros(self.Dataset.FRAMES_ALL_VIDS)
-        revisits_f = np.zeros(self.Dataset.FRAMES_ALL_VIDS)
-
-        for f in range(self.Dataset.FRAMES_ALL_VIDS):
-            array = eventcourse[:, f]
-            uniques, counts = np.unique(array, return_counts=True)
-            percentages = dict(zip(uniques, counts * 100 / len(array)))
-            for key, value in percentages.items():
-                if key == b"B":
-                    ground_f[f] = value
-                elif key == b"D":
-                    detection_f[f] = value
-                elif key == b"I":
-                    inspection_f[f] = value
-                elif key == b"R":
-                    revisits_f[f] = value
-        return [ground_f, detection_f, inspection_f, revisits_f]
 
     def evaluate_nss_scores(self):
         """
