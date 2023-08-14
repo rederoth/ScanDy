@@ -156,7 +156,20 @@ def fix_hist_step_vertical_line_at_end(ax):
         poly.set_xy(poly.get_xy()[:-1])
 
 
-def plot_var_pars(model, res_path, runid, parameters, par_sym, relative_par_vals):
+def fix_hist_step_vertical_lines(ax):
+    """
+    Get rid of vertical lines on the right of the histograms, as proposed here:
+    https://stackoverflow.com/questions/39728723/vertical-line-at-the-end-of-a-cdf-histogram-using-matplotlib
+
+    :param ax: Axis to be fixed
+    :type ax: matplotlib.axes._subplots.AxesSubplot
+    """
+    axpolygons = [poly for poly in ax.get_children() if isinstance(poly, Polygon)]
+    for poly in axpolygons:
+        poly.set_xy(poly.get_xy()[1:-1])
+
+
+def plot_var_pars(model, res_path, runid, parameters, par_sym, relative_par_vals, dircolors):
     """
     Make a summary plot of a parameter exploration.
 
@@ -175,7 +188,6 @@ def plot_var_pars(model, res_path, runid, parameters, par_sym, relative_par_vals
     :param relative_par_vals: _description_
     :type relative_par_vals: _type_
     """
-
     # load evolution results
     DILLNAME = f"{runid}.dill"
     evol = Evolution(lambda x: x, ParameterSpace(["mock"], [[0, 1]]))
@@ -240,6 +252,7 @@ def plot_var_pars(model, res_path, runid, parameters, par_sym, relative_par_vals
             xlabel=f"Factor for {par_sym[p]}",  # title=f'{var_par}',
             yticks=[1, 2, 3, 4],
             yticklabels=[10, 100, 1000, 10000],
+            ylim=[0.9, 4],
         )
         if p == 0:
             axs[0, p].set_ylabel("Foveation duration [ms]")
@@ -252,10 +265,10 @@ def plot_var_pars(model, res_path, runid, parameters, par_sym, relative_par_vals
         )
         if p == 0:
             axs[1, p].set_ylabel("Saccade amplitude [dva]")
-        for fovcat in ["B", "D", "I", "R"]:
-            axs[3, p].plot(x_par_vals, d_fovcat[fovcat], "o-", label=fovcat)
-        axs[2, p].plot(x_par_vals, f_amps, "o-", label="Sac. amp.")
-        axs[2, p].plot(x_par_vals, f_durs, "o-", label="Fov. dur.")
+        for c, fovcat in enumerate(["B", "D", "I", "R"]):
+            axs[3, p].plot(x_par_vals, d_fovcat[fovcat], "o-", label=fovcat, color=dircolors[c])
+        axs[2, p].plot(x_par_vals, f_amps, "o-", label="Sac. amp.", color="xkcd:light green")
+        axs[2, p].plot(x_par_vals, f_durs, "o-", label="Fov. dur.", color="xkcd:dark green")
         axs[2, p].axvline(mean_pars[var_par], ls="--", color="k")
         if p == 4:
             axs[2, p].legend()
