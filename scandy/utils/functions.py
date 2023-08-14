@@ -168,6 +168,57 @@ def fix_hist_step_vertical_lines(ax):
     for poly in axpolygons:
         poly.set_xy(poly.get_xy()[1:-1])
 
+def fovdur_vs_sacang(df_orig, num_bins, sma_ws):
+    """Prepares the data for the figure showing the relationship between saccade angle and binned foveation duration.
+
+    :param df_orig: Original foveation dataframe (GT or SIM)
+    :type df_orig: pandas.DataFrame
+    :param num_bins: Number of bins to use for the saccade angle
+    :type num_bins: int
+    :param sma_ws: simple moving average window size
+    :type sma_ws: int
+    :return: List containing the x values (saccade angle bins) and the y values (mean foveation duration)
+    :rtype: list
+    """
+    df = df_orig.copy()
+    bins = np.linspace(-180, 180, num_bins + 1)
+    x_vals = (bins[:-1] + bins[1:]) / 2
+
+    ret = [x_vals]
+
+    df['next_sac_ang_p'] = -1 * df['sac_angle_p'].shift(-1)
+    df = df.dropna(subset=['next_sac_ang_p'])
+    df['angle_bin'] = pd.cut(df['next_sac_ang_p'], bins=bins, labels=False)
+    agg_df = df.groupby('angle_bin').agg({'duration_ms': ['median', 'std']})
+    agg_df.columns = ['mean_duration', 'std_duration']
+    agg_df.reset_index(inplace=True)
+    agg_df = agg_df.append(agg_df.assign(angle_bin=agg_df['angle_bin'] + num_bins)).append(agg_df.assign(angle_bin=agg_df['angle_bin'] - num_bins))
+    agg_df = agg_df.sort_values(by='angle_bin')
+    agg_df[['mean_duration', 'std_duration']] = agg_df[['mean_duration', 'std_duration']].rolling(sma_ws, center=True).mean()
+    agg_df = agg_df.iloc[num_bins:2*num_bins]
+    ret.append(agg_df['mean_duration'])
+    return ret # x_vals, agg_df['mean_duration']
+
+
+def vonmises_kde(data, kappa, n_bins=100):
+    """Polar KDE for angular distribution using von Mises distribution.
+
+    :param data: Angla values in radians
+    :type data: numpy.ndarray
+    :param kappa: Kappa parameter of the von Mises distribution
+    :type kappa: int
+    :param n_bins: Number of angle bins, defaults to 100
+    :type n_bins: int, optional
+    :return: Bins and KDE values
+    :rtype: tuple
+    """
+    from scipy.special import i0
+    bins = np.linspace(-np.pi, np.pi, n_bins)
+    x = np.linspace(-np.pi, np.pi, n_bins)
+    kde = np.exp(kappa*np.cos(x[:, None]-data[None, :])).sum(1)/(2*np.pi*i0(kappa))
+    kde /= np.trapz(kde, x=bins)
+    return bins, kde 
+
 
 def plot_var_pars(model, res_path, runid, parameters, par_sym, relative_par_vals, dircolors):
     """
