@@ -779,7 +779,10 @@ class Model:
                         ls=":",
                     )
             ax.set_axis_off()
-
+            ax.margins(0,0)
+            ax.xaxis.set_major_locator(plt.NullLocator())
+            ax.yaxis.set_major_locator(plt.NullLocator())
+            
         out = [frame(i) for i in range(len(vidlist))]
         if slowgif:
             gif.save(out, outputpath + "_slow.gif", duration=100)
