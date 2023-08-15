@@ -60,7 +60,7 @@ To prepare the dataset, we used the following resources:
 * [TASED-Net](https://github.com/MichiganCOG/TASED-Net/) - High-level saliency maps
 * [PWC-Net](https://github.com/NVlabs/PWC-Net/) - Optical flow calculation
 
-If you only want to play around with a single video, we uploaded a version of the dataset only containing the "field03" video to [Google drive](https://drive.google.com/drive/folders/1ICTD9ENnidJXxHSvz30Aag3WXw8eslSZ?usp=share_link).
+If you only want to play around with a single video, we uploaded a version of the dataset only containing the "field03" video to [Google drive](https://drive.google.com/file/d/1oT9OJ2tRsvdJGFFLSKDCaY3BJev4Irzf/view?usp=sharing).
 
 ## Examples
 

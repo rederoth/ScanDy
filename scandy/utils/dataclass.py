@@ -148,7 +148,7 @@ class Dataset:
         # Check if a path to the ground truth foveation evaluation dataframe is provided.
         # If not, there should be the path to the files and a function to do this evaluation in a class method.
         if "gt_foveation_df" in datadict:
-            self.gt_foveation_df = pd.read_pickle(
+            self.gt_foveation_df = pd.read_csv(
                 self.PATH + datadict["gt_foveation_df"]
             )
             if self.trainset:

@@ -16,12 +16,12 @@ from neurolib.optimize.evolution import Evolution
 
 from scandy.models.ObjectModel import ObjectModel
 from scandy.models.LocationModel import LocationModel
+from scandy.models.MixedModel import MixedModel
 from scandy.utils.dataclass import Dataset
 import scandy.utils.functions as uf
 
 
 if __name__ == "__main__":
-
     starttime = time.time()
 
     # load VidCom dataset
@@ -31,7 +31,7 @@ if __name__ == "__main__":
         "FPS": 30,
         "PX_TO_DVA": 0.06,
         "FRAMES_ALL_VIDS": 300,
-        "gt_foveation_df": "2021-12-04_VidCom_GT_fov_df",
+        "gt_foveation_df": "VidCom_GT_fov_df.csv",
         "gt_fovframes_nss_df": "gt_fovframes_nss_df.csv",
         "trainset": [
             "dance01",
@@ -63,12 +63,13 @@ if __name__ == "__main__":
     }
     VidCom = Dataset(datadict)
 
-    runid = "loc_train_molin_64-32-50_2023-03-09-01H-04M-33S_22332349"
+    runid = "obj_train_None_64-32-50_2023-08-01-10H-43M-40S_22770884"
 
-    # obj_train_molin_64-32-50_2023-03-09-01H-04M-58S_22332350
-    # obj_train_None_64-32-50_2023-03-09-01H-05M-43S_22332351
-    # loc_train_molin_64-32-50_2023-03-09-01H-04M-33S_22332349
-    # loc_train_TASEDnet_64-32-50_2023-03-09-01H-02M-20S_22332348
+    # mix_train_molin_64-32-50_2023-08-01-10H-45M-24S_22770894
+    # obj_train_molin_64-32-50_2023-08-01-10H-44M-52S_22770892
+    # obj_train_None_64-32-50_2023-08-01-10H-43M-40S_22770884
+    # loc_train_molin_64-32-50_2023-08-01-10H-46M-11S_22770898
+    # loc_train_TASEDnet_64-32-50_2023-08-01-10H-46M-30S_22770899
 
     DILLNAME = f"{runid}.dill"
     evol = Evolution(lambda x: x, ParameterSpace(["mock"], [[0, 1]]))
@@ -81,6 +82,9 @@ if __name__ == "__main__":
         parameters = ["ddm_thres", "ddm_sig", "att_dva", "ior_decay", "ior_inobj"]
     elif "loc_" in runid:
         model = LocationModel(VidCom)
+        parameters = ["ddm_thres", "ddm_sig", "att_dva", "ior_decay", "ior_dva"]
+    elif "mix" in runid:
+        model = MixedModel(VidCom)
         parameters = ["ddm_thres", "ddm_sig", "att_dva", "ior_decay", "ior_dva"]
     else:
         raise NotImplementedError("Only Object- and Location-based are implemented")
@@ -103,9 +107,11 @@ if __name__ == "__main__":
                 par
             ]
 
-        if os.path.isfile(f"results/{runid}/testres_df_top{i}.csv") == False:
-            model.run("test", seeds=[s for s in range(1, 13)], overwrite_old=True)
+        if os.path.isfile(f"results/{runid}/res_df_top{i}.csv.gz") == False:
+            model.run("all", seeds=[s for s in range(1, 13)], overwrite_old=True)
             model.evaluate_all_to_df()
             res_ratio = model.get_fovcat_ratio()
             # logging.info("GT" VidCom.get_fovcat_ratio(), "\nSIM", res_ratio)
-            model.result_df.to_csv(f"results/{runid}/testres_df_top{i}.csv")
+            model.result_df.to_csv(
+                f"results/{runid}/res_df_top{i}.csv.gz", compression="gzip", index=False
+            )

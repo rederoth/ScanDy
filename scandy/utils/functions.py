@@ -156,7 +156,71 @@ def fix_hist_step_vertical_line_at_end(ax):
         poly.set_xy(poly.get_xy()[:-1])
 
 
-def plot_var_pars(model, res_path, runid, parameters, par_sym, relative_par_vals):
+def fix_hist_step_vertical_lines(ax):
+    """
+    Get rid of vertical lines on the right of the histograms, as proposed here:
+    https://stackoverflow.com/questions/39728723/vertical-line-at-the-end-of-a-cdf-histogram-using-matplotlib
+
+    :param ax: Axis to be fixed
+    :type ax: matplotlib.axes._subplots.AxesSubplot
+    """
+    axpolygons = [poly for poly in ax.get_children() if isinstance(poly, Polygon)]
+    for poly in axpolygons:
+        poly.set_xy(poly.get_xy()[1:-1])
+
+def fovdur_vs_sacang(df_orig, num_bins, sma_ws):
+    """Prepares the data for the figure showing the relationship between saccade angle and binned foveation duration.
+
+    :param df_orig: Original foveation dataframe (GT or SIM)
+    :type df_orig: pandas.DataFrame
+    :param num_bins: Number of bins to use for the saccade angle
+    :type num_bins: int
+    :param sma_ws: simple moving average window size
+    :type sma_ws: int
+    :return: List containing the x values (saccade angle bins) and the y values (mean foveation duration)
+    :rtype: list
+    """
+    df = df_orig.copy()
+    bins = np.linspace(-180, 180, num_bins + 1)
+    x_vals = (bins[:-1] + bins[1:]) / 2
+
+    ret = [x_vals]
+
+    df['next_sac_ang_p'] = -1 * df['sac_angle_p'].shift(-1)
+    df = df.dropna(subset=['next_sac_ang_p'])
+    df['angle_bin'] = pd.cut(df['next_sac_ang_p'], bins=bins, labels=False)
+    agg_df = df.groupby('angle_bin').agg({'duration_ms': ['median', 'std']})
+    agg_df.columns = ['mean_duration', 'std_duration']
+    agg_df.reset_index(inplace=True)
+    agg_df = agg_df.append(agg_df.assign(angle_bin=agg_df['angle_bin'] + num_bins)).append(agg_df.assign(angle_bin=agg_df['angle_bin'] - num_bins))
+    agg_df = agg_df.sort_values(by='angle_bin')
+    agg_df[['mean_duration', 'std_duration']] = agg_df[['mean_duration', 'std_duration']].rolling(sma_ws, center=True).mean()
+    agg_df = agg_df.iloc[num_bins:2*num_bins]
+    ret.append(agg_df['mean_duration'])
+    return ret # x_vals, agg_df['mean_duration']
+
+
+def vonmises_kde(data, kappa, n_bins=100):
+    """Polar KDE for angular distribution using von Mises distribution.
+
+    :param data: Angla values in radians
+    :type data: numpy.ndarray
+    :param kappa: Kappa parameter of the von Mises distribution
+    :type kappa: int
+    :param n_bins: Number of angle bins, defaults to 100
+    :type n_bins: int, optional
+    :return: Bins and KDE values
+    :rtype: tuple
+    """
+    from scipy.special import i0
+    bins = np.linspace(-np.pi, np.pi, n_bins)
+    x = np.linspace(-np.pi, np.pi, n_bins)
+    kde = np.exp(kappa*np.cos(x[:, None]-data[None, :])).sum(1)/(2*np.pi*i0(kappa))
+    kde /= np.trapz(kde, x=bins)
+    return bins, kde 
+
+
+def plot_var_pars(model, res_path, runid, parameters, par_sym, relative_par_vals, dircolors):
     """
     Make a summary plot of a parameter exploration.
 
@@ -175,7 +239,6 @@ def plot_var_pars(model, res_path, runid, parameters, par_sym, relative_par_vals
     :param relative_par_vals: _description_
     :type relative_par_vals: _type_
     """
-
     # load evolution results
     DILLNAME = f"{runid}.dill"
     evol = Evolution(lambda x: x, ParameterSpace(["mock"], [[0, 1]]))
@@ -240,6 +303,7 @@ def plot_var_pars(model, res_path, runid, parameters, par_sym, relative_par_vals
             xlabel=f"Factor for {par_sym[p]}",  # title=f'{var_par}',
             yticks=[1, 2, 3, 4],
             yticklabels=[10, 100, 1000, 10000],
+            ylim=[0.9, 4],
         )
         if p == 0:
             axs[0, p].set_ylabel("Foveation duration [ms]")
@@ -252,10 +316,10 @@ def plot_var_pars(model, res_path, runid, parameters, par_sym, relative_par_vals
         )
         if p == 0:
             axs[1, p].set_ylabel("Saccade amplitude [dva]")
-        for fovcat in ["B", "D", "I", "R"]:
-            axs[3, p].plot(x_par_vals, d_fovcat[fovcat], "o-", label=fovcat)
-        axs[2, p].plot(x_par_vals, f_amps, "o-", label="Sac. amp.")
-        axs[2, p].plot(x_par_vals, f_durs, "o-", label="Fov. dur.")
+        for c, fovcat in enumerate(["B", "D", "I", "R"]):
+            axs[3, p].plot(x_par_vals, d_fovcat[fovcat], "o-", label=fovcat, color=dircolors[c])
+        axs[2, p].plot(x_par_vals, f_amps, "o-", label="Sac. amp.", color="xkcd:light green")
+        axs[2, p].plot(x_par_vals, f_durs, "o-", label="Fov. dur.", color="xkcd:dark green")
         axs[2, p].axvline(mean_pars[var_par], ls="--", color="k")
         if p == 4:
             axs[2, p].legend()

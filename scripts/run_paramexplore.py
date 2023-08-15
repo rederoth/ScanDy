@@ -5,9 +5,7 @@ from scipy import stats
 import argparse
 import os
 
-# prepare logging
 import logging
-
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
@@ -31,7 +29,7 @@ if __name__ == "__main__":
         "FPS": 30,
         "PX_TO_DVA": 0.06,
         "FRAMES_ALL_VIDS": 300,
-        "gt_foveation_df": "2021-12-04_VidCom_GT_fov_df",
+        "gt_foveation_df": "VidCom_GT_fov_df.csv",
         "gt_fovframes_nss_df": "gt_fovframes_nss_df.csv",
         "trainset": [
             "dance01",
@@ -63,12 +61,9 @@ if __name__ == "__main__":
     }
     VidCom = Dataset(datadict)
 
-    runid = "loc_train_molin_64-32-50_2023-03-09-01H-04M-33S_22332349"
-
-    # obj_train_molin_64-32-50_2023-03-09-01H-04M-58S_22332350
-    # obj_train_None_64-32-50_2023-03-09-01H-05M-43S_22332351
-    # loc_train_molin_64-32-50_2023-03-09-01H-04M-33S_22332349
-    # loc_train_TASEDnet_64-32-50_2023-03-09-01H-02M-20S_22332348
+    runid = "obj_train_molin_64-32-50_2023-08-01-10H-44M-52S_22770892"
+    #"loc_train_molin_64-32-50_2023-08-01-10H-46M-11S_22770898"
+    # "obj_train_molin_64-32-50_2023-08-01-10H-44M-52S_22770892" 
 
     DILLNAME = f"{runid}.dill"
     evol = Evolution(lambda x: x, ParameterSpace(["mock"], [[0, 1]]))

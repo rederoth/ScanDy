@@ -42,20 +42,11 @@ class ObjectModel(Model):
             preload_res_df=preload_res_df,
         )
 
-        # Attributes that are updated when loading a video
-        self.video_data = {}
-        # Attributes that are updated when running the model for a single video
-        self._scanpath = []
-        self._f_sac = []
-        self._gaze_loc = np.zeros(2, int)  # self.params["startpos"].copy()
-        self._new_target = None
-        # self._prev_loc = np.zeros(2, int)  # self.params["startpos"].copy()
-        self._current_frame = 0
         # sensitivity and features are given as maps
         self._feature_map = np.zeros((self.Dataset.VID_SIZE_Y, self.Dataset.VID_SIZE_X))
         self._sens_map = np.zeros_like(self._feature_map)
         # object based value arrays (number of objects set correctly in reinit)
-        self._ior_objs = np.zeros(5)
+        self._ior_objs = np.zeros(5)  # 5 is only placeholder, will be updated
         self._decision_objs = np.zeros(5)
         # Stored maps / objectvals for a single run for visualization
         self._all_dvs = []
@@ -79,7 +70,7 @@ class ObjectModel(Model):
         par.rs = None
         # starting position, default is center
         par.startpos = np.array(
-            [self.Dataset.VID_SIZE_Y // 2, self.Dataset.VID_SIZE_X // 2]
+            [self.Dataset.VID_SIZE_X // 2, self.Dataset.VID_SIZE_Y // 2]
         )
         par.ior_decay = 1.0 * self.Dataset.FPS
         # Inhibition of currently foveated object
@@ -119,7 +110,7 @@ class ObjectModel(Model):
         self._f_sac = []
         self._current_frame = 0
         self._gaze_loc = np.zeros(2, int)
-        self._prev_loc = np.zeros(2, int)  # not used, but potentially for IOR
+        self._prev_gaze_loc = np.zeros(2, int)
         self._new_target = None
         self._feature_map.fill(0.0)
         self._sens_map.fill(0.0)
@@ -154,8 +145,8 @@ class ObjectModel(Model):
             obj.update_foveation(self._current_frame, self._gaze_loc)
         # Gaussian sensitivity spread around the gaze point
         gaze_gaussian = uf.gaussian_2d(
-            self._gaze_loc[1],
             self._gaze_loc[0],
+            self._gaze_loc[1],
             self.Dataset.VID_SIZE_X,
             self.Dataset.VID_SIZE_Y,
             self.params["att_dva"] * self.Dataset.DVA_TO_PX,
@@ -192,14 +183,28 @@ class ObjectModel(Model):
         a single timestep is above a threshold.
         """
         assert self.params is not None, "Model parameters not loaded"
+        # store previous decision vals to calculate the update -> waiting time
+        prev_decision_objs = self._decision_objs.copy()
         for obj_id, obj in enumerate(self.video_data["object_list"]):
             self._decision_objs[obj_id] = obj.update_evidence(
-                self._current_frame, self._feature_map, self._sens_map, self.params
+                self._current_frame,
+                self._cur_fov_frac,
+                self._feature_map,
+                self._sens_map,
+                self.params,
             )
 
-        if np.max(self._decision_objs) > self.params["ddm_thres"]:
+        max_dv = np.max(self._decision_objs)
+        if max_dv > self.params["ddm_thres"]:
             # find the object that crossed the threshold ==> becomes the target
             self._new_target = np.argmax(self._decision_objs)
+
+            # fraction of dt after which the threshold would be crossed
+            dt_frac_sac = (max_dv - self.params["ddm_thres"]) / (
+                max_dv - prev_decision_objs[self._new_target]
+            )
+            self._cur_waiting_time = np.clip(dt_frac_sac, 0, 1) * self._dt
+
             # reset decision variables for all objects
             for obj in self.video_data["object_list"]:
                 # TRYOUT: We could set to self.params["ddm_reset"] instead of 0
@@ -219,6 +224,7 @@ class ObjectModel(Model):
         center (but not if the objects are humans, then faces are too important)
         """
         assert self.params is not None, "Model parameters not loaded"
+        self._prev_gaze_loc = self._gaze_loc.copy()
         if self._new_target is not None:
             # probability of new location within target object depends on features
             probmap = (
@@ -232,21 +238,18 @@ class ObjectModel(Model):
             # draw new location from probability map
             # if features are all zero in the target (rare!) choose uniformly
             if np.isclose(probmapsum, 0):
-                self._gaze_loc = np.array(
-                    np.unravel_index(
-                        np.random.choice(len(probmap.ravel())),
-                        probmap.shape,
-                    )
+                choice_idx = np.unravel_index(
+                    np.random.choice(len(probmap.ravel())),
+                    probmap.shape,
                 )
             else:
-                self._gaze_loc = np.array(
-                    np.unravel_index(
-                        np.random.choice(
-                            len(probmap.ravel()), p=probmap.ravel() / probmapsum
-                        ),
-                        probmap.shape,
-                    )
+                choice_idx = np.unravel_index(
+                    np.random.choice(
+                        len(probmap.ravel()), p=probmap.ravel() / probmapsum
+                    ),
+                    probmap.shape,
                 )
+            self._gaze_loc = np.array([choice_idx[1], choice_idx[0]], dtype=int)
         else:
             # otherwise, we do fixational eye movements
             gaze_drift = np.array(
@@ -263,8 +266,8 @@ class ObjectModel(Model):
             self._gaze_loc += gaze_drift
 
         # make sure that gaze is always on video
-        self._gaze_loc[0] = max(min(self._gaze_loc[0], self.Dataset.VID_SIZE_Y - 1), 0)
-        self._gaze_loc[1] = max(min(self._gaze_loc[1], self.Dataset.VID_SIZE_X - 1), 0)
+        self._gaze_loc[0] = max(min(self._gaze_loc[0], self.Dataset.VID_SIZE_X - 1), 0)
+        self._gaze_loc[1] = max(min(self._gaze_loc[1], self.Dataset.VID_SIZE_Y - 1), 0)
 
     def write_sgl_output_gif(self, storagename, slowgif=False, dpi=100):
         """
@@ -332,8 +335,8 @@ class ObjectModel(Model):
             axs[1, 2].set_title("(V) Gaze update")
             for ax in axs.flat:
                 ax.scatter(
-                    self.result_dict[vidname][runname]["gaze"][f][1],
                     self.result_dict[vidname][runname]["gaze"][f][0],
+                    self.result_dict[vidname][runname]["gaze"][f][1],
                     s=300,
                     c="green",
                     marker="x",
@@ -341,8 +344,8 @@ class ObjectModel(Model):
                 )
                 ax.axis("off")
             axs[1, 2].scatter(
-                self.result_dict[vidname][runname]["gaze"][f + 1][1],
                 self.result_dict[vidname][runname]["gaze"][f + 1][0],
+                self.result_dict[vidname][runname]["gaze"][f + 1][1],
                 s=300,
                 facecolors="none",
                 edgecolors="r",
@@ -352,12 +355,12 @@ class ObjectModel(Model):
             )
 
             axs[1, 2].arrow(
-                self.result_dict[vidname][runname]["gaze"][f][1],
                 self.result_dict[vidname][runname]["gaze"][f][0],
-                self.result_dict[vidname][runname]["gaze"][f + 1][1]
-                - self.result_dict[vidname][runname]["gaze"][f][1],
+                self.result_dict[vidname][runname]["gaze"][f][1],
                 self.result_dict[vidname][runname]["gaze"][f + 1][0]
                 - self.result_dict[vidname][runname]["gaze"][f][0],
+                self.result_dict[vidname][runname]["gaze"][f + 1][1]
+                - self.result_dict[vidname][runname]["gaze"][f][1],
                 head_width=15,
                 head_length=15,
                 fc="k",

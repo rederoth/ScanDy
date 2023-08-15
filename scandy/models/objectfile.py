@@ -61,7 +61,8 @@ class ObjectFile:
         Calculate the middle point of the object mask in a given frame, only used for calculating the shift
         """
         if appears_in_frame:
-            return np.array(center_of_mass(self.object_maps[frame]), dtype=int)
+            cm_y, cm_x = center_of_mass(self.object_maps[frame])
+            return np.array([cm_x, cm_y], dtype=int)
         else:
             return np.array([0, 0], dtype=int)
 
@@ -71,9 +72,9 @@ class ObjectFile:
         Therefore, this update has to run for each object for each frame.
         CAVEAT: This attribute has no tolerance, different from the evaluation!
         """
-        # gaze_loc = [y,x] --> this is correct!
+        # gaze_loc = [x,y] --> this is correct!
         self.foveated = (
-            self.appears_in[frame] and self.object_maps[frame, gaze_loc[0], gaze_loc[1]]
+            self.appears_in[frame] and self.object_maps[frame, gaze_loc[1], gaze_loc[0]]
         )
 
     def update_ior(self, model_params):
@@ -97,7 +98,7 @@ class ObjectFile:
             self.ior = self._ior_tempmem * 1.0
         return self.ior
 
-    def update_evidence(self, frame, feature_map, sens_map, model_params):
+    def update_evidence(self, frame, fov_frac, feature_map, sens_map, model_params):
         """
         Accumulates evidence in favor of moving the eyes towards the object.
 
@@ -106,7 +107,9 @@ class ObjectFile:
         object is inhibited.
 
         :param frame: current frame
-        :type frame: str
+        :type frame: int
+        :param fov_frac: Fraction of the current frame that is spent foveating (not saccading)
+        :type fov_frac: float
         :param feature_map: Feature map of the current frame, loaded in modul I
         :type feature_map: np.ndarray
         :param sens_map: Sensitivity map of the current frame, updated in modul II
@@ -125,7 +128,49 @@ class ObjectFile:
                 * (1 - self.ior)
             )
 
-            self.decision_variable += mu + np.random.normal(0, model_params["ddm_sig"])
+            self.decision_variable += fov_frac * (
+                mu + np.random.normal(0, model_params["ddm_sig"])
+            )
+
+        # if object is not visible in one frame, decrease the evidence by 10% (--> exponentially to zero)
+        else:
+            self.decision_variable *= 0.9
+
+        return self.decision_variable
+
+
+    def update_evidence_locior(self, frame, fov_frac, feature_map, sens_map, ior_map, model_params):
+        """
+        Accumulates evidence in favor of moving the eyes towards the object for a mixed model 
+        where module III is location based but the rest is object based.
+
+        :param frame: current frame
+        :type frame: int
+        :param fov_frac: Fraction of the current frame that is spent foveating (not saccading)
+        :type fov_frac: float
+        :param feature_map: Feature map of the current frame, loaded in modul I
+        :type feature_map: np.ndarray
+        :param sens_map: Sensitivity map of the current frame, updated in modul II
+        :type sens_map: np.ndarray
+        :param ior_map: IOR map of the current frame, updated in modul III
+        :type ior_map: np.ndarray
+        :param model_params: Model parameters, needed for the DDM noise
+        :type model_params: dict
+        :return: Updated decision variable for the object
+        :rtype: float
+        """
+        # only update evidence according to scene if the object is visible
+        if self.appears_in[frame]:
+            mu = (
+                np.sum((self.object_maps[frame] * sens_map * (1 - ior_map) * feature_map))
+                / self.pxsize[frame]
+                * np.log(self.pxsize[frame])
+                # * (1 - self.ior) # this is not needed anymore due to the ior_map
+            )
+
+            self.decision_variable += fov_frac * (
+                mu + np.random.normal(0, model_params["ddm_sig"])
+            )
 
         # if object is not visible in one frame, decrease the evidence by 10% (--> exponentially to zero)
         else:

@@ -5,9 +5,7 @@ results/
 VidCom_example/
 ScanDy_results/
 
-# just in the beginning...
-# examples/
-# scandy/models/ObjectModel/
+*.csv
 test_hpc.ipynb
 *_private.ipynb
 *.zip
