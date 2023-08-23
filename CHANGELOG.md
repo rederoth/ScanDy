@@ -1,3 +1,10 @@
+## v0.0.3
+
+* Added saccade times
+* Durations are not limited through framerate anymore
+* Added a "mixed model"
+* Object-based dwell time evaluation in model
+
 ## v0.0.2
 
 * Version fix in requirements
