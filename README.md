@@ -80,17 +80,21 @@ All figures from our manuscript (Roth et al., 2023) can be reproduced with [this
 
 ### How to cite
 
-If `ScanDy` is useful for your research, please cite our preprint:
-> Roth, N., Rolfs, M., Hellwich, O., & Obermayer, K. (2023). Objects guide human gaze behavior in dynamic real-world scenes. *bioRxiv*, 2023-03.
+If `ScanDy` is useful for your research, please cite our paper:
+> Roth, N., Rolfs, M., Hellwich, O., & Obermayer, K. (2023). Objects guide human gaze behavior in dynamic real-world scenes. *PLOS Computational Biology* 19(10): e1011512.
 
 ```bibtex
 @article{roth2023objects,
  title = {Objects Guide Human Gaze Behavior in Dynamic Real-World Scenes},
  author = {Roth, Nicolas and Rolfs, Martin and Hellwich, Olaf and Obermayer, Klaus},
- elocation-id = {2023.03.14.532608},
+ journal = {PLOS Computational Biology},
+ publisher = {Public Library of Science},
  year = {2023},
- doi = {10.1101/2023.03.14.532608},
- publisher = {Cold Spring Harbor Laboratory},}
+ month = {10},
+ volume = {19},
+ url = {https://doi.org/10.1371/journal.pcbi.1011512},
+ pages = {1-39},
+ number = {10},
 ```
 
 ### Contact
